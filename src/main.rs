@@ -34,14 +34,15 @@ impl HelloApplication {
         }
 
         let instance = HelloApplication::create_instance(&entry, debug_enabled);
-        let (debug_utils_loader, debug_messenger) = validation_layer::setup_debug_utils(&entry, &instance, debug_enabled);
+        let (debug_utils_loader, debug_messenger) =
+            validation_layer::setup_debug_utils(&entry, &instance, debug_enabled);
 
         HelloApplication {
             debug_enabled,
             entry,
             instance,
             debug_utils_loader,
-            debug_messenger
+            debug_messenger,
         }
     }
 
@@ -76,7 +77,7 @@ impl HelloApplication {
                         return;
                     }
                 }
-                _ => ()
+                _ => (),
             }
         })
     }
@@ -109,13 +110,13 @@ impl HelloApplication {
         let extension_names = vec![
             Surface::name().as_ptr(),
             XlibSurface::name().as_ptr(),
-            DebugUtils::name().as_ptr()
+            DebugUtils::name().as_ptr(),
         ];
 
         let mut debug_utils_create_info = validation_layer::populate_debug_messenger_create_info();
-        let debug_layers = vec!(
-            CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap().as_ptr()
-        );
+        let debug_layers = vec![CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0")
+            .unwrap()
+            .as_ptr()];
 
         let mut create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
@@ -141,13 +142,13 @@ impl Drop for HelloApplication {
     fn drop(&mut self) {
         unsafe {
             if self.debug_enabled {
-                self.debug_utils_loader.destroy_debug_utils_messenger(self.debug_messenger, None)
+                self.debug_utils_loader
+                    .destroy_debug_utils_messenger(self.debug_messenger, None)
             }
             self.instance.destroy_instance(None)
         }
     }
 }
-
 
 fn main() {
     let app = HelloApplication::new(true);

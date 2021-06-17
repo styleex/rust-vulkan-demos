@@ -1,7 +1,6 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
-
 pub fn vk_to_string(raw_string_array: &[c_char]) -> String {
     // Implementation 1
     //    let end = '\0' as u8;

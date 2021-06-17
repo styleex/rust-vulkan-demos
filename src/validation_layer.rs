@@ -1,7 +1,9 @@
-use std::ffi::{c_void, CStr};
+use std::ffi::c_void;
+
 use std::ptr;
 
 use ash::vk;
+use std::ffi::CStr;
 
 unsafe extern "system" fn vulkan_debug_utils_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -45,7 +47,11 @@ pub fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateIn
     }
 }
 
-pub fn setup_debug_utils(entry: &ash::Entry, instance: &ash::Instance, debug_enabled: bool) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
+pub fn setup_debug_utils(
+    entry: &ash::Entry,
+    instance: &ash::Instance,
+    debug_enabled: bool,
+) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
     let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
 
     if debug_enabled {
