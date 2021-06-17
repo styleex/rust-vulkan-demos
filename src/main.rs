@@ -6,18 +6,34 @@ use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+use winit::platform::unix::WindowExtUnix;
+
+use crate::utils::create_surface;
 
 mod utils;
 mod validation_layer;
 
 struct QueueFamilyIndices {
     graphics_family: Option<u32>,
+    present_family: Option<u32>,
 }
 
 impl QueueFamilyIndices {
-    pub fn is_complete(&self) -> bool {
-        self.graphics_family.is_some()
+    pub fn new() -> QueueFamilyIndices {
+        QueueFamilyIndices {
+            graphics_family: None,
+            present_family: None,
+        }
     }
+
+    pub fn is_complete(&self) -> bool {
+        self.graphics_family.is_some() && self.present_family.is_some()
+    }
+}
+
+struct SurfaceStuff {
+    surface_loader: ash::extensions::khr::Surface,
+    surface: vk::SurfaceKHR,
 }
 
 struct HelloApplication {
@@ -26,13 +42,18 @@ struct HelloApplication {
     instance: ash::Instance,
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
-    device: ash::Device, // Logical device
+
+    // Logical device
+    device: ash::Device,
+
     _graphics_queue: vk::Queue,
     _physical_device: vk::PhysicalDevice,
+
+    surface_stuff: SurfaceStuff,
 }
 
 impl HelloApplication {
-    pub fn new(debug_enabled: bool) -> HelloApplication {
+    pub fn new(wnd: &winit::window::Window, debug_enabled: bool) -> HelloApplication {
         let entry = unsafe { ash::Entry::new().unwrap() };
         if debug_enabled {
             println!("Debug enabled");
@@ -48,8 +69,12 @@ impl HelloApplication {
         let (debug_utils_loader, debug_messenger) =
             validation_layer::setup_debug_utils(&entry, &instance, debug_enabled);
 
-        let physical_device = HelloApplication::pick_physical_device(&instance);
-        let (device, graphics_queue) = HelloApplication::create_logical_device(&instance, physical_device);
+
+        let surface_stuff = HelloApplication::create_surface(&entry, &instance, wnd);
+
+        let physical_device = HelloApplication::pick_physical_device(&instance, &surface_stuff);
+        let (device, graphics_queue) = HelloApplication::create_logical_device(&instance, physical_device, &surface_stuff);
+
 
         HelloApplication {
             debug_enabled,
@@ -58,13 +83,32 @@ impl HelloApplication {
             debug_messenger,
             device,
 
+            surface_stuff,
+
             _entry: entry,
             _graphics_queue: graphics_queue,
             _physical_device: physical_device,
         }
     }
 
-    fn is_phys_device_suitable(instance: &ash::Instance, physical_device: vk::PhysicalDevice) -> bool {
+    fn create_surface(entry: &ash::Entry, instance: &ash::Instance, window: &winit::window::Window) -> SurfaceStuff {
+        let x11_display = window.xlib_display().unwrap();
+        let x11_window = window.xlib_window().unwrap();
+        let x11_ci = vk::XlibSurfaceCreateInfoKHR::builder()
+            .window(x11_window as vk::Window)
+            .dpy(x11_display as *mut vk::Display);
+
+        let xlib_surface_loader = XlibSurface::new(entry, instance);
+
+        let surface = unsafe {
+            xlib_surface_loader.create_xlib_surface(&x11_ci, None).unwrap()
+        };
+        let surface_loader = ash::extensions::khr::Surface::new(entry, instance);
+
+        SurfaceStuff { surface_loader, surface }
+    }
+
+    fn is_phys_device_suitable(instance: &ash::Instance, physical_device: vk::PhysicalDevice, surface_stuff: &SurfaceStuff) -> bool {
         let device_properties = unsafe { instance.get_physical_device_properties(physical_device) };
         let device_features = unsafe { instance.get_physical_device_features(physical_device) };
         let device_queue_families =
@@ -105,24 +149,35 @@ impl HelloApplication {
         // there are plenty of features
         println!("\tGeometry Shader support: {}", device_features.geometry_shader == 1);
 
-        let indices = HelloApplication::find_queue_family(instance, physical_device);
+        let indices = HelloApplication::find_queue_family(instance, physical_device, surface_stuff);
         return indices.is_complete();
     }
 
-    fn find_queue_family(instance: &ash::Instance, physical_device: vk::PhysicalDevice) -> QueueFamilyIndices {
+    fn find_queue_family(instance: &ash::Instance, physical_device: vk::PhysicalDevice,
+                         surface_stuff: &SurfaceStuff) -> QueueFamilyIndices {
         let queue_families =
             unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
 
-        let mut queue_family_indices = QueueFamilyIndices {
-            graphics_family: None,
-        };
+        let mut queue_family_indices = QueueFamilyIndices::new();
 
         let mut index = 0;
+
         for queue_family in queue_families.iter() {
-            if queue_family.queue_count > 0
-                && queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-            {
+            if queue_family.queue_count > 0 && queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
                 queue_family_indices.graphics_family = Some(index);
+            }
+
+            let is_present_support = unsafe {
+                surface_stuff
+                    .surface_loader
+                    .get_physical_device_surface_support(
+                        physical_device,
+                        index as u32,
+                        surface_stuff.surface,
+                    ).unwrap()
+            };
+            if queue_family.queue_count > 0 && is_present_support {
+                queue_family_indices.present_family = Some(index);
             }
 
             if queue_family_indices.is_complete() {
@@ -135,12 +190,12 @@ impl HelloApplication {
         queue_family_indices
     }
 
-    fn pick_physical_device(instance: &ash::Instance) -> vk::PhysicalDevice {
+    fn pick_physical_device(instance: &ash::Instance, surface_stuff: &SurfaceStuff) -> vk::PhysicalDevice {
         let devices = unsafe { instance.enumerate_physical_devices().unwrap() };
 
         let mut ret_device: Option<vk::PhysicalDevice> = None;
         for device in devices {
-            if HelloApplication::is_phys_device_suitable(&instance, device) {
+            if HelloApplication::is_phys_device_suitable(&instance, device, surface_stuff) {
                 ret_device = Some(device)
             }
         }
@@ -148,8 +203,8 @@ impl HelloApplication {
         ret_device.expect("failed to find suitable GPU!")
     }
 
-    fn create_logical_device(instance: &ash::Instance, physical_device: vk::PhysicalDevice) -> (ash::Device, vk::Queue) {
-        let indices = HelloApplication::find_queue_family(instance, physical_device);
+    fn create_logical_device(instance: &ash::Instance, physical_device: vk::PhysicalDevice, surface_stuff: &SurfaceStuff) -> (ash::Device, vk::Queue) {
+        let indices = HelloApplication::find_queue_family(instance, physical_device, surface_stuff);
 
         let queue_priorities = [1.0_f32];
         let queue_ci = vec!(
@@ -167,15 +222,7 @@ impl HelloApplication {
         (device, graphics_queue)
     }
 
-    pub fn run(&self) {
-        let event_loop = EventLoop::new();
-
-        let wnd = winit::window::WindowBuilder::new()
-            .with_title("test")
-            .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
-            .build(&event_loop)
-            .expect("Failed to create window");
-
+    pub fn run(&self, event_loop: EventLoop<()>, wnd: winit::window::Window) {
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
@@ -263,6 +310,7 @@ impl Drop for HelloApplication {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_device(None);
+            self.surface_stuff.surface_loader.destroy_surface(self.surface_stuff.surface, None);
 
             if self.debug_enabled {
                 self.debug_utils_loader
@@ -274,6 +322,13 @@ impl Drop for HelloApplication {
 }
 
 fn main() {
-    let app = HelloApplication::new(true);
-    app.run();
+    let event_loop = EventLoop::new();
+    let wnd = winit::window::WindowBuilder::new()
+        .with_title("test")
+        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
+        .build(&event_loop)
+        .expect("Failed to create window");
+
+    let app = HelloApplication::new(&wnd, true);
+    app.run(event_loop, wnd);
 }
