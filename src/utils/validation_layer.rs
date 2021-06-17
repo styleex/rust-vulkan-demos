@@ -1,12 +1,14 @@
 use std::ffi::c_void;
-
+use std::ffi::CStr;
 use std::ptr;
 
 use ash::vk;
-use std::ffi::CStr;
+use ash::version::{EntryV1_0};
+use crate::utils;
 
-unsafe extern "system" fn vulkan_debug_utils_callback(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+
+unsafe extern "system"
+fn vulkan_debug_utils_callback(message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _p_user_data: *mut c_void,
@@ -47,11 +49,7 @@ pub fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateIn
     }
 }
 
-pub fn setup_debug_utils(
-    entry: &ash::Entry,
-    instance: &ash::Instance,
-    debug_enabled: bool,
-) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
+pub fn setup_debug_utils(entry: &ash::Entry, instance: &ash::Instance, debug_enabled: bool) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
     let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
 
     if debug_enabled {
@@ -67,4 +65,19 @@ pub fn setup_debug_utils(
 
         (debug_utils_loader, utils_messenger)
     }
+}
+
+pub fn check_validation_layer_support(entry: &ash::Entry) -> bool {
+    let layers = entry.enumerate_instance_layer_properties().unwrap();
+    println!("Available layers:");
+
+    let mut layer_names = Vec::new();
+    for layer in layers.iter() {
+        let layer_name = utils::vk_to_string(&layer.layer_name);
+
+        println!("\t{}", layer_name);
+        layer_names.push(layer_name);
+    }
+
+    return layer_names.contains(&"VK_LAYER_KHRONOS_validation".to_string());
 }
