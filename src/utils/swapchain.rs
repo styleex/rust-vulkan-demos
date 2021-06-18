@@ -1,15 +1,68 @@
+use std::ptr;
+
+use ash::version::DeviceV1_0;
 use ash::vk;
 use winit::window::Window;
 
-use crate::surface::SurfaceStuff;
 use crate::physical_device::QueueFamilyIndices;
+use crate::surface::SurfaceStuff;
 
 pub struct SwapChainStuff {
+    device: ash::Device,
+
     pub swapchain_loader: ash::extensions::khr::Swapchain,
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_images: Vec<vk::Image>,
+    pub image_views: Vec<vk::ImageView>,
+    pub swapchain_framebuffers: Vec<vk::Framebuffer>,
     pub swapchain_format: vk::Format,
     pub swapchain_extent: vk::Extent2D,
+}
+
+impl SwapChainStuff {
+    pub fn destroy(&mut self) {
+        unsafe {
+            for &framebuffer in self.swapchain_framebuffers.iter() {
+                self.device.destroy_framebuffer(framebuffer, None);
+            }
+
+            for &img_view in &self.image_views {
+                self.device.destroy_image_view(img_view, None);
+            }
+
+            self.swapchain_loader.destroy_swapchain(self.swapchain, None);
+        }
+    }
+
+    pub fn create_framebuffers(&mut self, device: &ash::Device, render_pass: vk::RenderPass) {
+        let mut framebuffers = vec![];
+
+        for &image_view in self.image_views.iter() {
+            let attachments = [image_view];
+
+            let framebuffer_create_info = vk::FramebufferCreateInfo {
+                s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
+                p_next: ptr::null(),
+                flags: vk::FramebufferCreateFlags::empty(),
+                render_pass,
+                attachment_count: attachments.len() as u32,
+                p_attachments: attachments.as_ptr(),
+                width: self.swapchain_extent.width,
+                height: self.swapchain_extent.height,
+                layers: 1,
+            };
+
+            let framebuffer = unsafe {
+                device
+                    .create_framebuffer(&framebuffer_create_info, None)
+                    .expect("Failed to create Framebuffer!")
+            };
+
+            framebuffers.push(framebuffer);
+        }
+
+        self.swapchain_framebuffers = framebuffers;
+    }
 }
 
 pub struct SwapChainSupportDetail {
@@ -43,7 +96,7 @@ pub fn query_swapchain_support(physical_device: vk::PhysicalDevice, surface_stuf
 }
 
 // TODO: Remove wnd param, pass extend param instead
-pub fn create_swapchain(instance: &ash::Instance, device: &ash::Device,
+pub fn create_swapchain(instance: &ash::Instance, device: ash::Device,
                         physical_device: vk::PhysicalDevice, surface_stuff: &SurfaceStuff,
                         queue_family: &QueueFamilyIndices, wnd: &Window) -> SwapChainStuff
 {
@@ -91,7 +144,7 @@ pub fn create_swapchain(instance: &ash::Instance, device: &ash::Device,
         .old_swapchain(vk::SwapchainKHR::null())
         .image_array_layers(1);
 
-    let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device);
+    let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, &device);
     let swapchain = unsafe {
         swapchain_loader
             .create_swapchain(&swapchain_ci, None)
@@ -104,12 +157,16 @@ pub fn create_swapchain(instance: &ash::Instance, device: &ash::Device,
             .expect("Failed to get Swapchain Images.")
     };
 
+    let image_views = create_image_views(&device, &swapchain_images, surface_format.format);
     SwapChainStuff {
+        device,
         swapchain_loader,
         swapchain,
         swapchain_format: surface_format.format,
         swapchain_extent: extent,
         swapchain_images,
+        image_views,
+        swapchain_framebuffers: vec![],
     }
 }
 
@@ -157,4 +214,29 @@ fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR, wnd: &Wind
             ),
         }
     }
+}
+
+fn create_image_views(device: &ash::Device, swapchain_images: &Vec<vk::Image>, swapchain_format: vk::Format) -> Vec<vk::ImageView> {
+    let mut ret = Vec::new();
+
+    for &img in swapchain_images {
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+
+        let view_ci = vk::ImageViewCreateInfo::builder()
+            .image(img)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(swapchain_format)
+            .subresource_range(subresource_range);
+
+        let image_view = unsafe { device.create_image_view(&view_ci, None).unwrap() };
+        ret.push(image_view);
+    }
+
+    ret
 }

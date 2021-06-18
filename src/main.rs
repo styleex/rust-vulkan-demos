@@ -2,32 +2,34 @@ use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+use winit::platform::run_return::EventLoopExtRunReturn;
+
+use utils::{logical_device, physical_device, pipeline, surface, swapchain, validation_layer, render_pass};
 
 mod utils;
-use utils::{validation_layer, surface, logical_device, physical_device, swapchain};
-
 
 struct HelloApplication {
     debug_enabled: bool,
+
     _entry: ash::Entry,
     instance: ash::Instance,
+
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
-
-    // Logical device
-    device: ash::Device,
 
     _graphics_queue: vk::Queue,
     _present_queue: vk::Queue,
     _physical_device: vk::PhysicalDevice,
 
-    surface_stuff: utils::surface::SurfaceStuff,
+    // Logical device
+    device: ash::Device,
 
-    swapchain_loader: ash::extensions::khr::Swapchain,
-    swapchain: vk::SwapchainKHR,
-    _swapchain_images: Vec<vk::Image>,
-    _swapchain_format: vk::Format,
-    _swapchain_extent: vk::Extent2D,
+    surface_stuff: surface::SurfaceStuff,
+    swapchain_stuff: swapchain::SwapChainStuff,
+
+    render_pass: vk::RenderPass,
+    pipeline_layout: vk::PipelineLayout,
+    graphics_pipeline: vk::Pipeline,
 }
 
 impl HelloApplication {
@@ -47,7 +49,6 @@ impl HelloApplication {
         let (debug_utils_loader, debug_messenger) =
             validation_layer::setup_debug_utils(&entry, &instance, debug_enabled);
 
-
         let surface_stuff = surface::create_surface(&entry, &instance, wnd);
 
         let physical_device = physical_device::pick_physical_device(&instance, &surface_stuff);
@@ -57,8 +58,14 @@ impl HelloApplication {
             unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
         let present_queue =
             unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
-        let swapchain_stuff = swapchain::create_swapchain(&instance, &device, physical_device,
+
+        let mut swapchain_stuff = swapchain::create_swapchain(&instance, device.clone(), physical_device,
                                                           &surface_stuff, &family_indices, wnd);
+
+        let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format);
+        swapchain_stuff.create_framebuffers(&device, render_pass);
+
+        let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(&device, render_pass, swapchain_stuff.swapchain_extent);
 
         HelloApplication {
             debug_enabled,
@@ -75,16 +82,15 @@ impl HelloApplication {
             _present_queue: present_queue,
             _physical_device: physical_device,
 
-            swapchain_loader: swapchain_stuff.swapchain_loader,
-            swapchain: swapchain_stuff.swapchain,
-            _swapchain_format: swapchain_stuff.swapchain_format,
-            _swapchain_images: swapchain_stuff.swapchain_images,
-            _swapchain_extent: swapchain_stuff.swapchain_extent,
+            swapchain_stuff,
+            render_pass,
+            pipeline_layout,
+            graphics_pipeline,
         }
     }
 
-    pub fn run(&self, event_loop: EventLoop<()>, wnd: winit::window::Window) {
-        event_loop.run(move |event, _, control_flow| {
+    pub fn run(&self, mut event_loop: EventLoop<()>, wnd: winit::window::Window) {
+        event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
             match event {
@@ -115,14 +121,19 @@ impl HelloApplication {
 impl Drop for HelloApplication {
     fn drop(&mut self) {
         unsafe {
-            self.swapchain_loader.destroy_swapchain(self.swapchain, None);
-            self.device.destroy_device(None);
-            self.surface_stuff.surface_loader.destroy_surface(self.surface_stuff.surface, None);
+            self.device.destroy_pipeline(self.graphics_pipeline, None);
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_render_pass(self.render_pass, None);
+            self.swapchain_stuff.destroy();
 
             if self.debug_enabled {
                 self.debug_utils_loader
-                    .destroy_debug_utils_messenger(self.debug_messenger, None)
+                    .destroy_debug_utils_messenger(self.debug_messenger, None);
             }
+
+            self.device.destroy_device(None);
+            self.surface_stuff.surface_loader.destroy_surface(self.surface_stuff.surface, None);
+
             self.instance.destroy_instance(None)
         }
     }

@@ -52,7 +52,7 @@ pub fn populate_debug_messenger_create_info() -> vk::DebugUtilsMessengerCreateIn
 pub fn setup_debug_utils(entry: &ash::Entry, instance: &ash::Instance, debug_enabled: bool) -> (ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT) {
     let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
 
-    if debug_enabled {
+    if !debug_enabled {
         (debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null())
     } else {
         let messenger_ci = populate_debug_messenger_create_info();
