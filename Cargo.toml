@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 ash = "0.32.1"
 winit = "0.25.0"
-num       = "0.4"
+num = "0.4"
