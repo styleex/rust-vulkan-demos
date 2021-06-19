@@ -5,7 +5,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
 use utils::{logical_device, physical_device, pipeline, surface, swapchain, validation_layer,
-            render_pass, commands, sync};
+            render_pass, commands, sync, vertex};
 use std::ptr;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::physical_device::QueueFamilyIndices;
@@ -38,6 +38,7 @@ struct HelloApplication {
     graphics_pipeline: vk::Pipeline,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
+    vertex_buffer: vertex::VertexBuffer,
 
     sync: sync::SyncObjects,
 
@@ -80,6 +81,7 @@ impl HelloApplication {
 
         let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(&device, render_pass, swapchain_stuff.swapchain_extent);
 
+        let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone());
         let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
         let command_buffers = commands::create_command_buffers(
             &device,
@@ -87,7 +89,9 @@ impl HelloApplication {
             graphics_pipeline,
             &swapchain_stuff.swapchain_framebuffers,
             render_pass,
-            swapchain_stuff.swapchain_extent);
+            swapchain_stuff.swapchain_extent,
+            vertex_buffer.vertex_buffer,
+        );
 
         let sync = sync::create_sync_objects(&device);
 
@@ -111,6 +115,8 @@ impl HelloApplication {
             render_pass,
             pipeline_layout,
             graphics_pipeline,
+
+            vertex_buffer,
 
             command_pool,
             command_buffers,
@@ -280,6 +286,7 @@ impl HelloApplication {
             &self.swapchain_stuff.swapchain_framebuffers,
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
+            self.vertex_buffer.vertex_buffer,
         );
     }
 
@@ -306,6 +313,7 @@ impl Drop for HelloApplication {
             }
 
             self.cleanup_swapchain();
+            self.vertex_buffer.destroy();
             self.device.destroy_command_pool(self.command_pool, None);
 
             if self.debug_enabled {

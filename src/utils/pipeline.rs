@@ -4,6 +4,7 @@ use std::ptr;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
+use crate::utils::vertex;
 
 fn read_shader_code(shader_path: &Path) -> Vec<u8> {
     use std::fs::File;
@@ -66,14 +67,17 @@ pub fn create_graphics_pipeline(device: &ash::Device, render_pass: vk::RenderPas
         },
     ];
 
+    let binding_description = vertex::Vertex::get_binding_descriptions();
+    let attribute_description = vertex::Vertex::get_attribute_descriptions();
+
     let vertex_input_state_create_info = vk::PipelineVertexInputStateCreateInfo {
         s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineVertexInputStateCreateFlags::empty(),
-        vertex_attribute_description_count: 0,
-        p_vertex_attribute_descriptions: ptr::null(),
-        vertex_binding_description_count: 0,
-        p_vertex_binding_descriptions: ptr::null(),
+        vertex_attribute_description_count: attribute_description.len() as u32,
+        p_vertex_attribute_descriptions: attribute_description.as_ptr(),
+        vertex_binding_description_count: binding_description.len() as u32,
+        p_vertex_binding_descriptions: binding_description.as_ptr(),
     };
     let vertex_input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo {
         s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,

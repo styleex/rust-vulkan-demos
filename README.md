@@ -4,3 +4,6 @@
    you could add logic to explicitly prefer a physical device that supports drawing and presentation in the same 
    queue for improved performance.)
 
+Проблемы:
+1. Странный проброс wnd
+2. Клубок зависимостей модулей render_pass, pipeline, vertex и пр.
