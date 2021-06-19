@@ -8,6 +8,7 @@ use utils::{logical_device, physical_device, pipeline, surface, swapchain, valid
             render_pass, commands, sync};
 use std::ptr;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
+use crate::utils::physical_device::QueueFamilyIndices;
 
 mod utils;
 
@@ -21,9 +22,10 @@ struct HelloApplication {
     debug_utils_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
 
+    family_indices: QueueFamilyIndices,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
-    _physical_device: vk::PhysicalDevice,
+    physical_device: vk::PhysicalDevice,
 
     // Logical device
     device: ash::Device,
@@ -40,6 +42,7 @@ struct HelloApplication {
     sync: sync::SyncObjects,
 
     current_frame: usize,
+    is_window_resized: bool,
 }
 
 impl HelloApplication {
@@ -99,9 +102,10 @@ impl HelloApplication {
 
             _entry: entry,
 
+            family_indices,
             graphics_queue,
             present_queue,
-            _physical_device: physical_device,
+            physical_device,
 
             swapchain_stuff,
             render_pass,
@@ -113,6 +117,7 @@ impl HelloApplication {
 
             sync,
             current_frame: 0,
+            is_window_resized: false,
         }
     }
 
@@ -138,12 +143,17 @@ impl HelloApplication {
 
                         return;
                     }
+
+                    if let WindowEvent::Resized(size) = event {
+                        println!("Window resized {}x{}", size.width, size.height);
+                        self.is_window_resized = true;
+                    }
                 }
                 Event::MainEventsCleared => {
                     wnd.request_redraw()
                 }
                 Event::RedrawRequested(_) => {
-                    self.draw_frame();
+                    self.draw_frame(&wnd);
                 }
                 // Important!
                 Event::LoopDestroyed => {
@@ -154,7 +164,7 @@ impl HelloApplication {
         })
     }
 
-    fn draw_frame(&mut self) {
+    fn draw_frame(&mut self, wnd: &winit::window::Window) {
         let wait_fences = [self.sync.inflight_fences[self.current_frame]];
 
         let (image_index, _is_sub_optimal) = unsafe {
@@ -215,13 +225,74 @@ impl HelloApplication {
             p_results: ptr::null_mut(),
         };
 
-        unsafe {
+        let result = unsafe {
             self.swapchain_stuff.swapchain_loader
                 .queue_present(self.present_queue, &present_info)
-                .expect("Failed to execute queue present.");
+        };
+
+        let is_resized = match result {
+            Ok(_) => self.is_window_resized,
+            Err(vk_result) => match vk_result {
+                vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR => true,
+                _ => panic!("Failed to execute queue present"),
+            }
+        };
+
+        if is_resized {
+            self.recreate_swapchain(wnd);
+            self.is_window_resized = false;
         }
 
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+
+    fn recreate_swapchain(&mut self, wnd: &winit::window::Window) {
+        unsafe {
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait device idle!")
+        };
+        self.cleanup_swapchain();
+
+        self.swapchain_stuff = swapchain::create_swapchain(
+            &self.instance,
+            self.device.clone(),
+            self.physical_device,
+            &self.surface_stuff,
+            &self.family_indices,
+            wnd,
+        );
+
+        self.render_pass = render_pass::create_render_pass(&self.device, self.swapchain_stuff.swapchain_format);
+        let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(
+            &self.device,
+            self.render_pass,
+            self.swapchain_stuff.swapchain_extent,
+        );
+        self.graphics_pipeline = graphics_pipeline;
+        self.pipeline_layout = pipeline_layout;
+        self.swapchain_stuff.create_framebuffers(&self.device, self.render_pass);
+
+        self.command_buffers = commands::create_command_buffers(
+            &self.device,
+            self.command_pool,
+            self.graphics_pipeline,
+            &self.swapchain_stuff.swapchain_framebuffers,
+            self.render_pass,
+            self.swapchain_stuff.swapchain_extent,
+        );
+    }
+
+    fn cleanup_swapchain(&mut self) {
+        unsafe {
+            self.device.free_command_buffers(self.command_pool, &self.command_buffers);
+
+            self.device.destroy_pipeline(self.graphics_pipeline, None);
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_render_pass(self.render_pass, None);
+        }
+
+        self.swapchain_stuff.destroy();
     }
 }
 
@@ -229,19 +300,13 @@ impl Drop for HelloApplication {
     fn drop(&mut self) {
         unsafe {
             for i in 0..MAX_FRAMES_IN_FLIGHT {
-                self.device
-                    .destroy_semaphore(self.sync.image_available_semaphores[i], None);
-                self.device
-                    .destroy_semaphore(self.sync.render_finished_semaphores[i], None);
+                self.device.destroy_semaphore(self.sync.image_available_semaphores[i], None);
+                self.device.destroy_semaphore(self.sync.render_finished_semaphores[i], None);
                 self.device.destroy_fence(self.sync.inflight_fences[i], None);
             }
 
-
+            self.cleanup_swapchain();
             self.device.destroy_command_pool(self.command_pool, None);
-            self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.destroy_render_pass(self.render_pass, None);
-            self.swapchain_stuff.destroy();
 
             if self.debug_enabled {
                 self.debug_utils_loader
