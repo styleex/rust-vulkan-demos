@@ -1,6 +1,6 @@
 use std::ptr;
 
-use ash::{RawPtr, vk};
+use ash::vk;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use memoffset::offset_of;
 

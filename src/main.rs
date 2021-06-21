@@ -36,8 +36,7 @@ struct HelloApplication {
     swapchain_stuff: swapchain::SwapChainStuff,
 
     render_pass: vk::RenderPass,
-    pipeline_layout: vk::PipelineLayout,
-    graphics_pipeline: vk::Pipeline,
+    pipeline: pipeline::Pipeline,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     vertex_buffer: vertex::VertexBuffer,
@@ -81,7 +80,7 @@ impl HelloApplication {
         let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format);
         swapchain_stuff.create_framebuffers(&device, render_pass);
 
-        let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(&device, render_pass, swapchain_stuff.swapchain_extent);
+        let pipeline = pipeline::create_graphics_pipeline(device.clone(), render_pass, swapchain_stuff.swapchain_extent);
 
         let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
 
@@ -89,7 +88,7 @@ impl HelloApplication {
         let command_buffers = commands::create_command_buffers(
             &device,
             command_pool,
-            graphics_pipeline,
+            pipeline.graphics_pipeline,
             &swapchain_stuff.swapchain_framebuffers,
             render_pass,
             swapchain_stuff.swapchain_extent,
@@ -117,8 +116,7 @@ impl HelloApplication {
 
             swapchain_stuff,
             render_pass,
-            pipeline_layout,
-            graphics_pipeline,
+            pipeline,
 
             vertex_buffer,
 
@@ -154,7 +152,7 @@ impl HelloApplication {
                         return;
                     }
 
-                    if let WindowEvent::Resized(size) = event {
+                    if let WindowEvent::Resized(_) = event {
                         self.is_window_resized = true;
                     }
                 }
@@ -282,19 +280,17 @@ impl HelloApplication {
         );
 
         self.render_pass = render_pass::create_render_pass(&self.device, self.swapchain_stuff.swapchain_format);
-        let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(
-            &self.device,
+        self.pipeline = pipeline::create_graphics_pipeline(
+            self.device.clone(),
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
         );
-        self.graphics_pipeline = graphics_pipeline;
-        self.pipeline_layout = pipeline_layout;
         self.swapchain_stuff.create_framebuffers(&self.device, self.render_pass);
 
         self.command_buffers = commands::create_command_buffers(
             &self.device,
             self.command_pool,
-            self.graphics_pipeline,
+            self.pipeline.graphics_pipeline,
             &self.swapchain_stuff.swapchain_framebuffers,
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
@@ -307,8 +303,7 @@ impl HelloApplication {
         unsafe {
             self.device.free_command_buffers(self.command_pool, &self.command_buffers);
 
-            self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            self.pipeline.destroy();
             self.device.destroy_render_pass(self.render_pass, None);
         }
 

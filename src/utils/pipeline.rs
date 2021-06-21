@@ -33,14 +33,29 @@ fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderModule
     }
 }
 
-pub fn create_graphics_pipeline(device: &ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D) -> (vk::Pipeline, vk::PipelineLayout) {
+pub struct Pipeline {
+    device: ash::Device,
+    pub pipeline_layout: vk::PipelineLayout,
+    pub graphics_pipeline: vk::Pipeline,
+}
+
+impl Pipeline {
+    pub fn destroy(&self) {
+        unsafe {
+            self.device.destroy_pipeline(self.graphics_pipeline, None);
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+        }
+    }
+}
+
+pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D) -> Pipeline {
     let vert_shader_code =
         read_shader_code(Path::new("shaders/spv/09-shader-base.vert.spv"));
     let frag_shader_code =
         read_shader_code(Path::new("shaders/spv/09-shader-base.frag.spv"));
 
-    let vert_shader_module = create_shader_module(device, vert_shader_code);
-    let frag_shader_module = create_shader_module(device, frag_shader_code);
+    let vert_shader_module = create_shader_module(&device, vert_shader_code);
+    let frag_shader_module = create_shader_module(&device, frag_shader_code);
 
     let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
 
@@ -248,5 +263,9 @@ pub fn create_graphics_pipeline(device: &ash::Device, render_pass: vk::RenderPas
         device.destroy_shader_module(frag_shader_module, None);
     }
 
-    (graphics_pipelines[0], pipeline_layout)
+    Pipeline {
+        device,
+        graphics_pipeline: graphics_pipelines[0],
+        pipeline_layout,
+    }
 }
