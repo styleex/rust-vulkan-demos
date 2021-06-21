@@ -1,7 +1,7 @@
 use std::ptr;
 
+use ash::{RawPtr, vk};
 use ash::version::{DeviceV1_0, InstanceV1_0};
-use ash::vk;
 use memoffset::offset_of;
 
 #[repr(C)]
@@ -38,20 +38,27 @@ impl Vertex {
     }
 }
 
-const VERTICES_DATA: [Vertex; 3] = [
+const VERTICES_DATA: [Vertex; 4] = [
     Vertex {
-        pos: [0.0, -0.5],
+        pos: [-0.5, -0.5],
         color: [1.0, 0.0, 0.0],
     },
     Vertex {
-        pos: [0.5, 0.5],
+        pos: [0.5, -0.5],
         color: [0.0, 1.0, 0.0],
     },
     Vertex {
-        pos: [-0.5, 0.5],
+        pos: [0.5, 0.5],
         color: [0.0, 0.0, 1.0],
     },
+    Vertex {
+        pos: [-0.5, 0.5],
+        color: [1.0, 1.0, 1.0],
+    },
 ];
+
+const INDICES_DATA: [u32; 6] = [0, 1, 2, 2, 3, 0];
+
 
 fn find_memory_type(
     type_filter: u32,
@@ -191,6 +198,8 @@ fn copy_buffer(
         device
             .queue_submit(submit_queue, &submit_info, vk::Fence::null())
             .expect("Failed to Submit Queue.");
+
+        // TODO: использовать fence у queue_submit
         device
             .queue_wait_idle(submit_queue)
             .expect("Failed to wait Queue idle");
@@ -199,10 +208,73 @@ fn copy_buffer(
     }
 }
 
+fn create_data_buffer<T: Sized>(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    device: ash::Device,
+    command_pool: vk::CommandPool,
+    submit_queue: vk::Queue,
+    usage: vk::BufferUsageFlags,
+    data: Vec<T>) -> (vk::Buffer, vk::DeviceMemory)
+{
+    let mem_properties =
+        unsafe { instance.get_physical_device_memory_properties(physical_device) };
+
+    let data_size = (std::mem::size_of::<T>() * data.len()) as u64;
+    let (staging_buffer, staging_buffer_memory) = create_buffer(
+        &device,
+        data_size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        &mem_properties,
+    );
+
+    unsafe {
+        let data_ptr = device
+            .map_memory(
+                staging_buffer_memory,
+                0,
+                data_size,
+                vk::MemoryMapFlags::empty(),
+            )
+            .expect("Failed to Map Memory") as *mut T;
+
+        data_ptr.copy_from_nonoverlapping(data.as_ptr(), data.len());
+
+        device.unmap_memory(staging_buffer_memory);
+    }
+
+    let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+        &device,
+        data_size,
+        vk::BufferUsageFlags::TRANSFER_DST | usage,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        &mem_properties);
+
+    copy_buffer(
+        &device,
+        submit_queue,
+        command_pool,
+        staging_buffer,
+        vertex_buffer,
+        data_size,
+    );
+
+    unsafe {
+        device.destroy_buffer(staging_buffer, None);
+        device.free_memory(staging_buffer_memory, None);
+    }
+
+    (vertex_buffer, vertex_buffer_memory)
+}
+
 pub struct VertexBuffer {
     device: ash::Device,
     pub vertex_buffer: vk::Buffer,
     pub vertex_buffer_memory: vk::DeviceMemory,
+
+    pub index_buffer: vk::Buffer,
+    pub index_buffer_memory: vk::DeviceMemory,
 }
 
 impl VertexBuffer {
@@ -212,61 +284,41 @@ impl VertexBuffer {
                   command_pool: vk::CommandPool,
                   submit_queue: vk::Queue,
     ) -> VertexBuffer {
-        let mem_properties =
-            unsafe { instance.get_physical_device_memory_properties(physical_device) };
-
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
-            &device,
-            std::mem::size_of_val(&VERTICES_DATA) as u64,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &mem_properties,
-        );
-
-        unsafe {
-            let data_ptr = device
-                .map_memory(
-                    staging_buffer_memory,
-                    0,
-                    std::mem::size_of_val(&VERTICES_DATA) as u64,
-                    vk::MemoryMapFlags::empty(),
-                )
-                .expect("Failed to Map Memory") as *mut Vertex;
-
-            data_ptr.copy_from_nonoverlapping(VERTICES_DATA.as_ptr(), VERTICES_DATA.len());
-
-            device.unmap_memory(staging_buffer_memory);
-        }
-
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-            &device,
-            std::mem::size_of_val(&VERTICES_DATA) as u64,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &mem_properties);
-
-        copy_buffer(
-            &device,
-            submit_queue,
+        let (vertex_buffer, vertex_buffer_memory) = create_data_buffer(
+            instance,
+            physical_device,
+            device.clone(),
             command_pool,
-            staging_buffer,
-            vertex_buffer,
-            std::mem::size_of_val(&VERTICES_DATA) as u64,
-        );
+            submit_queue,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            VERTICES_DATA.to_vec());
 
-        unsafe {
-            device.destroy_buffer(staging_buffer, None);
-            device.free_memory(staging_buffer_memory, None);
-        }
+        let (index_buffer, index_buffer_memory) = create_data_buffer(
+            instance,
+            physical_device,
+            device.clone(),
+            command_pool,
+            submit_queue,
+            vk::BufferUsageFlags::INDEX_BUFFER,
+            INDICES_DATA.to_vec());
+
         VertexBuffer {
             device,
+
             vertex_buffer,
             vertex_buffer_memory,
+
+            index_buffer,
+            index_buffer_memory,
         }
     }
 
     pub fn destroy(&self) {
         unsafe {
+
+            self.device.destroy_buffer(self.index_buffer, None);
+            self.device.free_memory(self.index_buffer_memory, None);
+
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);
         }

@@ -1,6 +1,7 @@
-use ash::vk;
 use std::ptr;
+
 use ash::version::DeviceV1_0;
+use ash::vk;
 
 pub fn create_command_pool(device: &ash::Device, queue_index: u32) -> vk::CommandPool {
     let command_pool_create_info = vk::CommandPoolCreateInfo {
@@ -24,6 +25,7 @@ pub fn create_command_buffers(device: &ash::Device,
                               render_pass: vk::RenderPass,
                               surface_extent: vk::Extent2D,
                               vertex_buffer: vk::Buffer,
+                              index_buffer: vk::Buffer,
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
@@ -88,8 +90,9 @@ pub fn create_command_buffers(device: &ash::Device,
             let offsets = [0_u64];
 
             device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+            device.cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 
-            device.cmd_draw(command_buffer, 3, 1, 0, 0);
+            device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
 
             device.cmd_end_render_pass(command_buffer);
 

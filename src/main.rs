@@ -1,14 +1,16 @@
+use std::ptr;
+
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
-use utils::{logical_device, physical_device, pipeline, surface, swapchain, validation_layer,
-            render_pass, commands, sync, vertex};
-use std::ptr;
-use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
+use utils::{commands, logical_device, physical_device, pipeline, render_pass, surface,
+            swapchain, sync, validation_layer, vertex};
+
 use crate::utils::physical_device::QueueFamilyIndices;
+use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 
 mod utils;
 
@@ -92,6 +94,7 @@ impl HelloApplication {
             render_pass,
             swapchain_stuff.swapchain_extent,
             vertex_buffer.vertex_buffer,
+            vertex_buffer.index_buffer,
         );
 
         let sync = sync::create_sync_objects(&device);
@@ -178,14 +181,23 @@ impl HelloApplication {
                 .wait_for_fences(&wait_fences, true, std::u64::MAX)
                 .expect("Failed to wait for Fence!");
 
-            self.swapchain_stuff.swapchain_loader
+            let result = self.swapchain_stuff.swapchain_loader
                 .acquire_next_image(
                     self.swapchain_stuff.swapchain,
                     std::u64::MAX,
                     self.sync.image_available_semaphores[self.current_frame],
                     vk::Fence::null(),
-                )
-                .expect("Failed to acquire next image.")
+                );
+            match result {
+                Ok(image_index) => image_index,
+                Err(vk_result) => match vk_result {
+                    vk::Result::ERROR_OUT_OF_DATE_KHR => {
+                        self.recreate_swapchain(&wnd);
+                        return;
+                    }
+                    _ => panic!("Failed to acquire Swap Chain Image!"),
+                },
+            }
         };
 
         let wait_semaphores = [self.sync.image_available_semaphores[self.current_frame]];
@@ -287,6 +299,7 @@ impl HelloApplication {
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
             self.vertex_buffer.vertex_buffer,
+            self.vertex_buffer.index_buffer,
         );
     }
 
