@@ -315,7 +315,6 @@ impl VertexBuffer {
 
     pub fn destroy(&self) {
         unsafe {
-
             self.device.destroy_buffer(self.index_buffer, None);
             self.device.free_memory(self.index_buffer_memory, None);
 
