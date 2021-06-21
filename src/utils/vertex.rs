@@ -81,7 +81,7 @@ fn find_memory_type(
     panic!("Failed to find suitable memory type!")
 }
 
-fn create_buffer(
+pub fn create_buffer(
     device: &ash::Device,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,

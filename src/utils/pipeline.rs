@@ -6,6 +6,23 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use crate::utils::vertex;
 
+
+pub struct Pipeline {
+    device: ash::Device,
+    pub pipeline_layout: vk::PipelineLayout,
+    pub graphics_pipeline: vk::Pipeline,
+}
+
+impl Pipeline {
+    pub fn destroy(&self) {
+        unsafe {
+            self.device.destroy_pipeline(self.graphics_pipeline, None);
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+        }
+    }
+}
+
+
 fn read_shader_code(shader_path: &Path) -> Vec<u8> {
     use std::fs::File;
     use std::io::Read;
@@ -33,22 +50,7 @@ fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderModule
     }
 }
 
-pub struct Pipeline {
-    device: ash::Device,
-    pub pipeline_layout: vk::PipelineLayout,
-    pub graphics_pipeline: vk::Pipeline,
-}
-
-impl Pipeline {
-    pub fn destroy(&self) {
-        unsafe {
-            self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
-        }
-    }
-}
-
-pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D) -> Pipeline {
+pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, ubo_layout: vk::DescriptorSetLayout) -> Pipeline {
     let vert_shader_code =
         read_shader_code(Path::new("shaders/spv/09-shader-base.vert.spv"));
     let frag_shader_code =
@@ -209,13 +211,16 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
     //            dynamic_state_count: dynamic_state.len() as u32,
     //            p_dynamic_states: dynamic_state.as_ptr(),
     //        };
+    let set_layouts = [
+        ubo_layout,
+    ];
 
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineLayoutCreateFlags::empty(),
-        set_layout_count: 0,
-        p_set_layouts: ptr::null(),
+        set_layout_count: set_layouts.len() as u32,
+        p_set_layouts: set_layouts.as_ptr(),
         push_constant_range_count: 0,
         p_push_constant_ranges: ptr::null(),
     };

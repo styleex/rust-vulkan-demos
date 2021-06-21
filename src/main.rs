@@ -7,7 +7,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
 use utils::{commands, logical_device, physical_device, pipeline, render_pass, surface,
-            swapchain, sync, validation_layer, vertex};
+            swapchain, sync, validation_layer, vertex, ubo};
 
 use crate::utils::physical_device::QueueFamilyIndices;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
@@ -36,11 +36,12 @@ struct HelloApplication {
     swapchain_stuff: swapchain::SwapChainStuff,
 
     render_pass: vk::RenderPass,
+    ubo_layout: vk::DescriptorSetLayout,
     pipeline: pipeline::Pipeline,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     vertex_buffer: vertex::VertexBuffer,
-
+    uniform_buffers: ubo::UboBuffers,
     sync: sync::SyncObjects,
 
     current_frame: usize,
@@ -80,7 +81,8 @@ impl HelloApplication {
         let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format);
         swapchain_stuff.create_framebuffers(&device, render_pass);
 
-        let pipeline = pipeline::create_graphics_pipeline(device.clone(), render_pass, swapchain_stuff.swapchain_extent);
+        let ubo_layout = ubo::create_descriptor_set_layout(&device);
+        let pipeline = pipeline::create_graphics_pipeline(device.clone(), render_pass, swapchain_stuff.swapchain_extent, ubo_layout);
 
         let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
 
@@ -95,6 +97,7 @@ impl HelloApplication {
             vertex_buffer.vertex_buffer,
             vertex_buffer.index_buffer,
         );
+        let uniform_buffers = ubo::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len(), swapchain_stuff.swapchain_extent);
 
         let sync = sync::create_sync_objects(&device);
 
@@ -116,12 +119,14 @@ impl HelloApplication {
 
             swapchain_stuff,
             render_pass,
+            ubo_layout,
             pipeline,
 
             vertex_buffer,
 
             command_pool,
             command_buffers,
+            uniform_buffers,
 
             sync,
             current_frame: 0,
@@ -160,7 +165,7 @@ impl HelloApplication {
                     wnd.request_redraw()
                 }
                 Event::RedrawRequested(_) => {
-                    self.draw_frame(&wnd);
+                    self.draw_frame(&wnd, 0.0);
                 }
                 // Important!
                 Event::LoopDestroyed => {
@@ -171,7 +176,7 @@ impl HelloApplication {
         })
     }
 
-    fn draw_frame(&mut self, wnd: &winit::window::Window) {
+    fn draw_frame(&mut self, wnd: &winit::window::Window, delta_time: f32) {
         let wait_fences = [self.sync.inflight_fences[self.current_frame]];
 
         let (image_index, _is_sub_optimal) = unsafe {
@@ -197,7 +202,7 @@ impl HelloApplication {
                 },
             }
         };
-
+        self.uniform_buffers.update_uniform_buffer(image_index as usize, delta_time);
         let wait_semaphores = [self.sync.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let signal_semaphores = [self.sync.render_finished_semaphores[self.current_frame]];
@@ -284,6 +289,7 @@ impl HelloApplication {
             self.device.clone(),
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
+            self.ubo_layout,
         );
         self.swapchain_stuff.create_framebuffers(&self.device, self.render_pass);
 
@@ -321,6 +327,8 @@ impl Drop for HelloApplication {
             }
 
             self.cleanup_swapchain();
+            self.device.destroy_descriptor_set_layout(self.ubo_layout, None);
+            self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();
             self.device.destroy_command_pool(self.command_pool, None);
 
