@@ -81,8 +81,9 @@ impl HelloApplication {
 
         let (graphics_pipeline, pipeline_layout) = pipeline::create_graphics_pipeline(&device, render_pass, swapchain_stuff.swapchain_extent);
 
-        let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone());
         let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
+
+        let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone(), command_pool, graphics_queue);
         let command_buffers = commands::create_command_buffers(
             &device,
             command_pool,
@@ -151,7 +152,6 @@ impl HelloApplication {
                     }
 
                     if let WindowEvent::Resized(size) = event {
-                        println!("Window resized {}x{}", size.width, size.height);
                         self.is_window_resized = true;
                     }
                 }
