@@ -18,14 +18,17 @@ pub fn create_command_pool(device: &ash::Device, queue_index: u32) -> vk::Comman
     }
 }
 
-pub fn create_command_buffers(device: &ash::Device,
-                              command_pool: vk::CommandPool,
-                              graphics_pipeline: vk::Pipeline,
-                              framebuffers: &Vec<vk::Framebuffer>,
-                              render_pass: vk::RenderPass,
-                              surface_extent: vk::Extent2D,
-                              vertex_buffer: vk::Buffer,
-                              index_buffer: vk::Buffer,
+pub fn create_command_buffers(
+    device: &ash::Device,
+    command_pool: vk::CommandPool,
+    graphics_pipeline: vk::Pipeline,
+    framebuffers: &Vec<vk::Framebuffer>,
+    render_pass: vk::RenderPass,
+    surface_extent: vk::Extent2D,
+    vertex_buffer: vk::Buffer,
+    index_buffer: vk::Buffer,
+    pipeline_layout: vk::PipelineLayout,
+    descriptor_sets: &Vec<vk::DescriptorSet>,
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
@@ -86,9 +89,17 @@ pub fn create_command_buffers(device: &ash::Device,
                 graphics_pipeline,
             );
 
+            let descriptor_sets_to_bind = [descriptor_sets[i]];
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline_layout,
+                0,
+                &descriptor_sets_to_bind,
+                &[]);
+
             let vertex_buffers = [vertex_buffer];
             let offsets = [0_u64];
-
             device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
             device.cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 

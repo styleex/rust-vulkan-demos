@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::ptr;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
@@ -6,15 +7,16 @@ use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
-use utils::{commands, logical_device, physical_device, pipeline, render_pass, surface,
-            swapchain, sync, validation_layer, vertex, ubo};
+use utils::{commands, descriptor_set, logical_device, physical_device, pipeline, render_pass,
+            surface, swapchain, sync, uniform_buffer, validation_layer, vertex};
 
 use crate::utils::physical_device::QueueFamilyIndices;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
+use std::time::Instant;
 
 mod utils;
 
-// FIXME: Последняя синхронизация из тутора не сделана;
+
 struct HelloApplication {
     debug_enabled: bool,
 
@@ -37,15 +39,18 @@ struct HelloApplication {
 
     render_pass: vk::RenderPass,
     ubo_layout: vk::DescriptorSetLayout,
+    descriptor_sets: descriptor_set::DescriptorSets,
+
     pipeline: pipeline::Pipeline,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     vertex_buffer: vertex::VertexBuffer,
-    uniform_buffers: ubo::UboBuffers,
+    uniform_buffers: uniform_buffer::UboBuffers,
     sync: sync::SyncObjects,
 
     current_frame: usize,
     is_window_resized: bool,
+    start_time: Instant,
 }
 
 impl HelloApplication {
@@ -81,12 +86,22 @@ impl HelloApplication {
         let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format);
         swapchain_stuff.create_framebuffers(&device, render_pass);
 
-        let ubo_layout = ubo::create_descriptor_set_layout(&device);
+        let ubo_layout = uniform_buffer::create_descriptor_set_layout(&device);
+
         let pipeline = pipeline::create_graphics_pipeline(device.clone(), render_pass, swapchain_stuff.swapchain_extent, ubo_layout);
 
         let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
 
         let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone(), command_pool, graphics_queue);
+        let uniform_buffers = uniform_buffer::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len(), swapchain_stuff.swapchain_extent);
+
+        let descriptor_sets = descriptor_set::DescriptorSets::new(
+            device.clone(),
+            swapchain_stuff.swapchain_images.len(),
+            ubo_layout,
+            &uniform_buffers.uniform_buffers,
+        );
+
         let command_buffers = commands::create_command_buffers(
             &device,
             command_pool,
@@ -96,8 +111,9 @@ impl HelloApplication {
             swapchain_stuff.swapchain_extent,
             vertex_buffer.vertex_buffer,
             vertex_buffer.index_buffer,
+            pipeline.pipeline_layout,
+            &descriptor_sets.descriptor_sets,
         );
-        let uniform_buffers = ubo::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len(), swapchain_stuff.swapchain_extent);
 
         let sync = sync::create_sync_objects(&device);
 
@@ -127,10 +143,13 @@ impl HelloApplication {
             command_pool,
             command_buffers,
             uniform_buffers,
+            descriptor_sets,
 
             sync,
             current_frame: 0,
             is_window_resized: false,
+
+            start_time: Instant::now(),
         }
     }
 
@@ -165,7 +184,7 @@ impl HelloApplication {
                     wnd.request_redraw()
                 }
                 Event::RedrawRequested(_) => {
-                    self.draw_frame(&wnd, 0.0);
+                    self.draw_frame(&wnd);
                 }
                 // Important!
                 Event::LoopDestroyed => {
@@ -176,7 +195,7 @@ impl HelloApplication {
         })
     }
 
-    fn draw_frame(&mut self, wnd: &winit::window::Window, delta_time: f32) {
+    fn draw_frame(&mut self, wnd: &winit::window::Window) {
         let wait_fences = [self.sync.inflight_fences[self.current_frame]];
 
         let (image_index, _is_sub_optimal) = unsafe {
@@ -202,7 +221,8 @@ impl HelloApplication {
                 },
             }
         };
-        self.uniform_buffers.update_uniform_buffer(image_index as usize, delta_time);
+        self.uniform_buffers.update_uniform_buffer(image_index as usize, self.start_time.elapsed().as_secs_f32());
+
         let wait_semaphores = [self.sync.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let signal_semaphores = [self.sync.render_finished_semaphores[self.current_frame]];
@@ -293,6 +313,12 @@ impl HelloApplication {
         );
         self.swapchain_stuff.create_framebuffers(&self.device, self.render_pass);
 
+        self.descriptor_sets = descriptor_set::DescriptorSets::new(
+            self.device.clone(),
+            self.swapchain_stuff.swapchain_images.len(),
+            self.ubo_layout,
+            &self.uniform_buffers.uniform_buffers);
+
         self.command_buffers = commands::create_command_buffers(
             &self.device,
             self.command_pool,
@@ -302,12 +328,16 @@ impl HelloApplication {
             self.swapchain_stuff.swapchain_extent,
             self.vertex_buffer.vertex_buffer,
             self.vertex_buffer.index_buffer,
+            self.pipeline.pipeline_layout,
+            &self.descriptor_sets.descriptor_sets,
         );
     }
 
     fn cleanup_swapchain(&mut self) {
         unsafe {
             self.device.free_command_buffers(self.command_pool, &self.command_buffers);
+
+            self.descriptor_sets.destroy();
 
             self.pipeline.destroy();
             self.device.destroy_render_pass(self.render_pass, None);

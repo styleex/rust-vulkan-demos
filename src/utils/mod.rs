@@ -11,7 +11,8 @@ pub mod render_pass;
 pub mod commands;
 pub mod sync;
 pub mod vertex;
-pub mod ubo;
+pub mod uniform_buffer;
+pub mod descriptor_set;
 
 pub fn vk_to_string(raw_string_array: &[c_char]) -> String {
     let raw_string = unsafe {
