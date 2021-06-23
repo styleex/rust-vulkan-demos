@@ -2,7 +2,7 @@ use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use std::ptr;
 use crate::utils::vertex;
-use cgmath::{Deg, Point3, Vector3, Matrix4, SquareMatrix, Rad};
+use cgmath::{Deg, Point3, Vector3, Matrix4, Rad};
 
 
 #[repr(C)]
@@ -82,7 +82,7 @@ impl UboBuffers {
     }
 
     pub fn update_uniform_buffer(&self, current_image: usize, delta_time: f32) {
-        let mut ubos = [UniformBufferObject {
+        let ubos = [UniformBufferObject {
             model: Matrix4::from_angle_z(Rad::from(Deg(90.0 * delta_time))),
             view: Matrix4::look_at_rh(
                 Point3::new(2.0, 2.0, 1.0),
@@ -96,9 +96,6 @@ impl UboBuffers {
                 10.0,
             ),
         }];
-
-        // ubos[0].proj.y.y *= -1.0;
-
 
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;
 

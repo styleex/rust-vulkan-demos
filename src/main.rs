@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::ptr;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
