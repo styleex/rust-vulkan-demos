@@ -16,10 +16,15 @@ pub fn create_logical_device(instance: &ash::Instance, physical_device: vk::Phys
     let enable_extension_names = [
         ash::extensions::khr::Swapchain::name().as_ptr(), // currently just enable the Swapchain extension.
     ];
+    let physical_device_features = vk::PhysicalDeviceFeatures {
+        sampler_anisotropy: vk::TRUE, // enable anisotropy device feature from Chapter-24.
+        ..Default::default()
+    };
 
     let device_ci = vk::DeviceCreateInfo::builder()
         .queue_create_infos(queue_ci.as_slice())
-        .enabled_extension_names(&enable_extension_names);
+        .enabled_extension_names(&enable_extension_names)
+        .enabled_features(&physical_device_features);
 
     let device = unsafe { instance.create_device(physical_device, &device_ci, None).unwrap() };
 

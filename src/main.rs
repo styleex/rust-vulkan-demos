@@ -1,4 +1,6 @@
+use std::path::Path;
 use std::ptr;
+use std::time::Instant;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -11,7 +13,7 @@ use utils::{commands, descriptor_set, logical_device, physical_device, pipeline,
 
 use crate::utils::physical_device::QueueFamilyIndices;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
-use std::time::Instant;
+use crate::utils::texture;
 
 mod utils;
 
@@ -46,6 +48,8 @@ struct HelloApplication {
     vertex_buffer: vertex::VertexBuffer,
     uniform_buffers: uniform_buffer::UboBuffers,
     sync: sync::SyncObjects,
+
+    texture: texture::Texture,
 
     current_frame: usize,
     is_window_resized: bool,
@@ -94,11 +98,23 @@ impl HelloApplication {
         let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone(), command_pool, graphics_queue);
         let uniform_buffers = uniform_buffer::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len(), swapchain_stuff.swapchain_extent);
 
+        // FIXME: pass me to all other funcs
+        let mem_properties =
+            unsafe { instance.get_physical_device_memory_properties(physical_device) };
+
+        let texture = texture::Texture::new(
+            device.clone(),
+            command_pool,
+            graphics_queue,
+            &mem_properties,
+            Path::new("assets/texture.jpg"));
+
         let descriptor_sets = descriptor_set::DescriptorSets::new(
             device.clone(),
             swapchain_stuff.swapchain_images.len(),
             ubo_layout,
             &uniform_buffers.uniform_buffers,
+            &texture,
         );
 
         let command_buffers = commands::create_command_buffers(
@@ -143,6 +159,8 @@ impl HelloApplication {
             command_buffers,
             uniform_buffers,
             descriptor_sets,
+
+            texture,
 
             sync,
             current_frame: 0,
@@ -316,7 +334,9 @@ impl HelloApplication {
             self.device.clone(),
             self.swapchain_stuff.swapchain_images.len(),
             self.ubo_layout,
-            &self.uniform_buffers.uniform_buffers);
+            &self.uniform_buffers.uniform_buffers,
+            &self.texture,
+        );
 
         self.command_buffers = commands::create_command_buffers(
             &self.device,
@@ -356,6 +376,8 @@ impl Drop for HelloApplication {
             }
 
             self.cleanup_swapchain();
+
+            self.texture.destroy();
             self.device.destroy_descriptor_set_layout(self.ubo_layout, None);
             self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();

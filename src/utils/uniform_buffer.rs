@@ -1,9 +1,10 @@
+use std::ptr;
+
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use std::ptr;
-use crate::utils::vertex;
-use cgmath::{Deg, Point3, Vector3, Matrix4, Rad};
+use cgmath::{Deg, Matrix4, Point3, Rad, Vector3};
 
+use crate::utils::buffer_utils;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -15,13 +16,23 @@ struct UniformBufferObject {
 
 
 pub fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLayout {
-    let ubo_layout_bindings = [vk::DescriptorSetLayoutBinding {
-        binding: 0,
-        descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-        descriptor_count: 1,
-        stage_flags: vk::ShaderStageFlags::VERTEX,
-        p_immutable_samplers: ptr::null(),
-    }];
+    let ubo_layout_bindings = [
+        vk::DescriptorSetLayoutBinding {
+            binding: 0,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            p_immutable_samplers: ptr::null(),
+        },
+        vk::DescriptorSetLayoutBinding {
+            // sampler uniform
+            binding: 1,
+            descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            p_immutable_samplers: ptr::null(),
+        },
+    ];
 
     let ubo_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
         s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -62,7 +73,7 @@ impl UboBuffers {
             unsafe { instance.get_physical_device_memory_properties(physical_device) };
 
         for _ in 0..swapchain_image_count {
-            let (uniform_buffer, uniform_buffer_memory) = vertex::create_buffer(
+            let (uniform_buffer, uniform_buffer_memory) = buffer_utils::create_buffer(
                 &device,
                 buffer_size as u64,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,

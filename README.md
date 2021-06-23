@@ -10,3 +10,6 @@
 3. Заюзать аллокатор для видеопамяти;
 4. Для вершинного и индексного буфера использовать один фактический буфер (рекомендация. cache-friendly);
 
+
+- https://developer.nvidia.com/vulkan-memory-management
+- Sparse images
