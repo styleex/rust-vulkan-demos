@@ -1,11 +1,12 @@
+use std::path::Path;
+use std::time;
+
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use memoffset::offset_of;
 use tobj;
 
 use crate::utils::buffer_utils;
-use std::path::Path;
-use std::time;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -177,7 +178,10 @@ fn create_data_buffer<T: Sized>(
 }
 
 fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
-    let model_obj = tobj::load_obj(model_path)
+    let model_obj = tobj::load_obj(model_path, &tobj::LoadOptions {
+        single_index: true,
+        ..Default::default()
+    })
         .expect("Failed to load model object!");
 
     let mut vertices = vec![];
@@ -191,6 +195,8 @@ fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
         if mesh.texcoords.len() == 0 {
             panic!("Missing texture coordinate for the model.")
         }
+
+        println!("{}", mesh.texcoord_indices.len());
 
         let total_vertices_count = mesh.positions.len() / 3;
         for i in 0..total_vertices_count {
