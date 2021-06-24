@@ -13,3 +13,5 @@
 
 - https://developer.nvidia.com/vulkan-memory-management
 - Sparse images
+- Баг тутора: один depth буфер для нескольких кадров 
+  https://stackoverflow.com/questions/62371266/why-is-a-single-depth-buffer-sufficient-for-this-vulkan-swapchain-render-loop

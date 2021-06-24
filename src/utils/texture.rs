@@ -27,7 +27,9 @@ impl Texture {
         let (texture_image, texture_image_memory) = create_texture_image(
             &device, command_pool, submit_queue, device_memory_properties, image_path);
 
-        let texture_image_view = create_image_view(&device, texture_image, vk::Format::R8G8B8A8_UNORM);
+        let texture_image_view = create_image_view(
+            &device, texture_image, vk::Format::R8G8B8A8_UNORM,
+            vk::ImageAspectFlags::COLOR);
         let texture_sampler = create_texture_sampler(&device);
 
         Texture {
@@ -145,7 +147,7 @@ fn create_texture_image(
     (texture_image, texture_image_memory)
 }
 
-fn create_image(
+pub fn create_image(
     device: &ash::Device,
     width: u32,
     height: u32,
@@ -328,10 +330,11 @@ fn copy_buffer_to_image(
 //     texture_image_view
 // }
 
-fn create_image_view(
+pub fn create_image_view(
     device: &ash::Device,
     image: vk::Image,
     format: vk::Format,
+    aspect_mask: vk::ImageAspectFlags,
 ) -> vk::ImageView {
     let imageview_create_info = vk::ImageViewCreateInfo {
         s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
@@ -346,7 +349,7 @@ fn create_image_view(
             a: vk::ComponentSwizzle::IDENTITY,
         },
         subresource_range: vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
+            aspect_mask,
             base_mip_level: 0,
             level_count: 1,
             base_array_layer: 0,

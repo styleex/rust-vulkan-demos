@@ -86,7 +86,7 @@ impl HelloApplication {
         let mut swapchain_stuff = swapchain::create_swapchain(&instance, device.clone(), physical_device,
                                                               &surface_stuff, &family_indices, wnd);
 
-        let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format);
+        let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format, swapchain_stuff.depth_image_format);
         swapchain_stuff.create_framebuffers(&device, render_pass);
 
         let ubo_layout = uniform_buffer::create_descriptor_set_layout(&device);
@@ -321,7 +321,7 @@ impl HelloApplication {
             wnd,
         );
 
-        self.render_pass = render_pass::create_render_pass(&self.device, self.swapchain_stuff.swapchain_format);
+        self.render_pass = render_pass::create_render_pass(&self.device, self.swapchain_stuff.swapchain_format, self.swapchain_stuff.depth_image_format);
         self.pipeline = pipeline::create_graphics_pipeline(
             self.device.clone(),
             self.render_pass,

@@ -1,11 +1,13 @@
 use std::ptr;
 
-use ash::version::DeviceV1_0;
+use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use winit::window::Window;
 
 use crate::physical_device::QueueFamilyIndices;
 use crate::surface::SurfaceStuff;
+use crate::texture;
+
 
 pub struct SwapChainStuff {
     device: ash::Device,
@@ -13,10 +15,15 @@ pub struct SwapChainStuff {
     pub swapchain_loader: ash::extensions::khr::Swapchain,
     pub swapchain: vk::SwapchainKHR,
     pub swapchain_images: Vec<vk::Image>,
-    pub image_views: Vec<vk::ImageView>,
+    image_views: Vec<vk::ImageView>,
     pub swapchain_framebuffers: Vec<vk::Framebuffer>,
     pub swapchain_format: vk::Format,
     pub swapchain_extent: vk::Extent2D,
+
+    depth_image: vk::Image,
+    depth_image_memory: vk::DeviceMemory,
+    depth_image_view: vk::ImageView,
+    pub depth_image_format: vk::Format,
 }
 
 impl SwapChainStuff {
@@ -30,6 +37,10 @@ impl SwapChainStuff {
                 self.device.destroy_image_view(img_view, None);
             }
 
+            self.device.destroy_image_view(self.depth_image_view, None);
+            self.device.destroy_image(self.depth_image, None);
+            self.device.free_memory(self.depth_image_memory, None);
+
             self.swapchain_loader.destroy_swapchain(self.swapchain, None);
         }
     }
@@ -38,7 +49,7 @@ impl SwapChainStuff {
         let mut framebuffers = vec![];
 
         for &image_view in self.image_views.iter() {
-            let attachments = [image_view];
+            let attachments = [image_view, self.depth_image_view];
 
             let framebuffer_create_info = vk::FramebufferCreateInfo {
                 s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
@@ -96,10 +107,14 @@ pub fn query_swapchain_support(physical_device: vk::PhysicalDevice, surface_stuf
 }
 
 // TODO: Remove wnd param, pass extend param instead
-pub fn create_swapchain(instance: &ash::Instance, device: ash::Device,
-                        physical_device: vk::PhysicalDevice, surface_stuff: &SurfaceStuff,
-                        queue_family: &QueueFamilyIndices, wnd: &Window) -> SwapChainStuff
-{
+pub fn create_swapchain(
+    instance: &ash::Instance,
+    device: ash::Device,
+    physical_device: vk::PhysicalDevice,
+    surface_stuff: &SurfaceStuff,
+    queue_family: &QueueFamilyIndices,
+    wnd: &Window,
+) -> SwapChainStuff {
     let swapchain_support = query_swapchain_support(physical_device, surface_stuff);
 
     let surface_format = choose_swapchain_format(&swapchain_support.formats);
@@ -158,6 +173,21 @@ pub fn create_swapchain(instance: &ash::Instance, device: ash::Device,
     };
 
     let image_views = create_image_views(&device, &swapchain_images, surface_format.format);
+
+    let mem_props = unsafe { instance.get_physical_device_memory_properties(physical_device) };
+    let depth_image_format = vk::Format::D32_SFLOAT;
+    let (depth_image, depth_image_memory) = texture::create_image(
+        &device,
+        extent.width, extent.height, depth_image_format,
+        vk::ImageTiling::OPTIMAL,
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        &mem_props,
+    );
+
+    let depth_image_view = texture::create_image_view(
+        &device, depth_image, depth_image_format, vk::ImageAspectFlags::DEPTH);
+
     SwapChainStuff {
         device,
         swapchain_loader,
@@ -167,6 +197,11 @@ pub fn create_swapchain(instance: &ash::Instance, device: ash::Device,
         swapchain_images,
         image_views,
         swapchain_framebuffers: vec![],
+
+        depth_image,
+        depth_image_memory,
+        depth_image_view,
+        depth_image_format,
     }
 }
 

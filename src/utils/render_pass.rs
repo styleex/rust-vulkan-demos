@@ -1,8 +1,9 @@
-use ash::vk;
-use ash::version::DeviceV1_0;
 use std::ptr;
 
-pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format) -> vk::RenderPass {
+use ash::version::DeviceV1_0;
+use ash::vk;
+
+pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format, depth_format: vk::Format) -> vk::RenderPass {
      let color_attachment = vk::AttachmentDescription {
         format: surface_format,
         flags: vk::AttachmentDescriptionFlags::empty(),
@@ -20,10 +21,27 @@ pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format) -> v
         layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
     };
 
+    let depth_attachment = vk::AttachmentDescription {
+        format: depth_format,
+        flags: vk::AttachmentDescriptionFlags::empty(),
+        samples: vk::SampleCountFlags::TYPE_1,
+        load_op: vk::AttachmentLoadOp::CLEAR,
+        store_op: vk::AttachmentStoreOp::DONT_CARE,
+        stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+        stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+        initial_layout: vk::ImageLayout::UNDEFINED,
+        final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
+    let depth_attachment_ref = vk::AttachmentReference {
+        attachment: 1,
+        layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
     let subpasses = [vk::SubpassDescription {
         color_attachment_count: 1,
         p_color_attachments: &color_attachment_ref,
-        p_depth_stencil_attachment: ptr::null(),
+        p_depth_stencil_attachment: &depth_attachment_ref,
         flags: vk::SubpassDescriptionFlags::empty(),
         pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
         input_attachment_count: 0,
@@ -33,7 +51,7 @@ pub fn create_render_pass(device: &ash::Device, surface_format: vk::Format) -> v
         p_preserve_attachments: ptr::null(),
     }];
 
-    let render_pass_attachments = [color_attachment];
+    let render_pass_attachments = [color_attachment, depth_attachment];
 
     let subpass_dependencies = [vk::SubpassDependency {
         src_subpass: vk::SUBPASS_EXTERNAL,
