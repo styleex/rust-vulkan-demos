@@ -107,7 +107,7 @@ impl HelloApplication {
             command_pool,
             graphics_queue,
             &mem_properties,
-            Path::new("assets/texture.jpg"));
+            Path::new("assets/chalet.jpg"));
 
         let descriptor_sets = descriptor_set::DescriptorSets::new(
             device.clone(),
@@ -126,6 +126,7 @@ impl HelloApplication {
             swapchain_stuff.swapchain_extent,
             vertex_buffer.vertex_buffer,
             vertex_buffer.index_buffer,
+            vertex_buffer.index_count,
             pipeline.pipeline_layout,
             &descriptor_sets.descriptor_sets,
         );
@@ -347,6 +348,7 @@ impl HelloApplication {
             self.swapchain_stuff.swapchain_extent,
             self.vertex_buffer.vertex_buffer,
             self.vertex_buffer.index_buffer,
+            self.vertex_buffer.index_count,
             self.pipeline.pipeline_layout,
             &self.descriptor_sets.descriptor_sets,
         );

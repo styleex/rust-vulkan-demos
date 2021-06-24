@@ -28,7 +28,7 @@ impl Texture {
             &device, command_pool, submit_queue, device_memory_properties, image_path);
 
         let texture_image_view = create_image_view(
-            &device, texture_image, vk::Format::R8G8B8A8_UNORM,
+            &device, texture_image, vk::Format::R8G8B8A8_SRGB,
             vk::ImageAspectFlags::COLOR);
         let texture_sampler = create_texture_sampler(&device);
 
@@ -64,10 +64,11 @@ fn create_texture_image(
     let (image_width, image_height) = (image_object.width(), image_object.height());
     let image_size =
         (std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;
+    println!("{:?}", image_object.color());
     let image_data = match &image_object {
         image::DynamicImage::ImageLumaA8(_)
         | image::DynamicImage::ImageBgra8(_)
-        | image::DynamicImage::ImageRgba8(_) => image_object.into_bytes(),
+        | image::DynamicImage::ImageRgba8(_) => image_object.to_rgba8().into_raw(),
         _ => image_object.to_rgba8().into_raw(),
     };
 
@@ -102,7 +103,7 @@ fn create_texture_image(
         device,
         image_width,
         image_height,
-        vk::Format::R8G8B8A8_UNORM,
+        vk::Format::R8G8B8A8_SRGB,
         vk::ImageTiling::OPTIMAL,
         vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -114,7 +115,7 @@ fn create_texture_image(
         command_pool,
         submit_queue,
         texture_image,
-        vk::Format::R8G8B8A8_UNORM,
+        vk::Format::R8G8B8A8_SRGB,
         vk::ImageLayout::UNDEFINED,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
     );
@@ -243,6 +244,14 @@ fn transition_image_layout(
         dst_access_mask = vk::AccessFlags::SHADER_READ;
         source_stage = vk::PipelineStageFlags::TRANSFER;
         destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
+    } else if old_layout == vk::ImageLayout::UNDEFINED
+        && new_layout == vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
+    {
+        src_access_mask = vk::AccessFlags::empty();
+        dst_access_mask =
+            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE;
+        source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+        destination_stage = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
     } else {
         panic!("Unsupported layout transition!")
     }
