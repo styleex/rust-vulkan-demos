@@ -148,7 +148,7 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
         flags: vk::PipelineMultisampleStateCreateFlags::empty(),
         p_next: ptr::null(),
         rasterization_samples: samples,
-        sample_shading_enable: vk::FALSE,
+        sample_shading_enable: vk::TRUE,
         min_sample_shading: 0.0,
         p_sample_mask: ptr::null(),
         alpha_to_one_enable: vk::FALSE,

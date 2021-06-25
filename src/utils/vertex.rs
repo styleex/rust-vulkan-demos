@@ -238,6 +238,7 @@ impl VertexBuffer {
     ) -> VertexBuffer {
         let t1 = time::Instant::now();
         let (vertices, indices) = load_model(Path::new("assets/chalet.obj"));
+        // let (vertices, indices) = (VERTICES_DATA.to_vec(), INDICES_DATA.to_vec());
         println!("Model loaded: {}", t1.elapsed().as_secs_f32());
 
         let index_count = indices.len();

@@ -18,6 +18,7 @@ pub fn create_logical_device(instance: &ash::Instance, physical_device: vk::Phys
     ];
     let physical_device_features = vk::PhysicalDeviceFeatures {
         sampler_anisotropy: vk::TRUE, // enable anisotropy device feature from Chapter-24.
+        sample_rate_shading: vk::TRUE,
         ..Default::default()
     };
 
