@@ -50,7 +50,7 @@ fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderModule
     }
 }
 
-pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, ubo_layout: vk::DescriptorSetLayout) -> Pipeline {
+pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, ubo_layout: vk::DescriptorSetLayout, samples: vk::SampleCountFlags) -> Pipeline {
     let vert_shader_code =
         read_shader_code(Path::new("shaders/spv/09-shader-base.vert.spv"));
     let frag_shader_code =
@@ -147,7 +147,7 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
         s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         flags: vk::PipelineMultisampleStateCreateFlags::empty(),
         p_next: ptr::null(),
-        rasterization_samples: vk::SampleCountFlags::TYPE_1,
+        rasterization_samples: samples,
         sample_shading_enable: vk::FALSE,
         min_sample_shading: 0.0,
         p_sample_mask: ptr::null(),

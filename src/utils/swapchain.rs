@@ -8,7 +8,6 @@ use crate::physical_device::QueueFamilyIndices;
 use crate::surface::SurfaceStuff;
 use crate::texture;
 
-
 pub struct SwapChainStuff {
     device: ash::Device,
 
@@ -24,9 +23,143 @@ pub struct SwapChainStuff {
     depth_image_memory: vk::DeviceMemory,
     depth_image_view: vk::ImageView,
     pub depth_image_format: vk::Format,
+
+    msaa_color_image: vk::Image,
+    msaa_color_image_memory: vk::DeviceMemory,
+    msaa_color_image_view: vk::ImageView,
 }
 
 impl SwapChainStuff {
+    // TODO: Remove wnd param, pass extend param instead
+    pub fn new(
+        instance: &ash::Instance,
+        device: ash::Device,
+        physical_device: vk::PhysicalDevice,
+        surface_stuff: &SurfaceStuff,
+        queue_family: &QueueFamilyIndices,
+        wnd: &Window,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> SwapChainStuff {
+        let swapchain_support = query_swapchain_support(physical_device, surface_stuff);
+
+        let surface_format = choose_swapchain_format(&swapchain_support.formats);
+        let present_mode =
+            choose_swapchain_present_mode(&swapchain_support.present_modes);
+        let extent = choose_swapchain_extent(&swapchain_support.capabilities, wnd);
+
+        let image_count = swapchain_support.capabilities.min_image_count + 1;
+        let image_count = if swapchain_support.capabilities.max_image_count > 0 {
+            image_count.min(swapchain_support.capabilities.max_image_count)
+        } else {
+            image_count
+        };
+
+        let (image_sharing_mode, queue_family_index_count, queue_family_indices) =
+            if queue_family.graphics_family != queue_family.present_family {
+                (
+                    vk::SharingMode::CONCURRENT,
+                    2,
+                    vec![
+                        queue_family.graphics_family.unwrap(),
+                        queue_family.present_family.unwrap(),
+                    ],
+                )
+            } else {
+                (vk::SharingMode::EXCLUSIVE, 0, vec![])
+            };
+
+        let swapchain_ci = vk::SwapchainCreateInfoKHR {
+            s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
+            p_next: ptr::null(),
+            flags: vk::SwapchainCreateFlagsKHR::empty(),
+            surface: surface_stuff.surface,
+            min_image_count: image_count,
+            image_color_space: surface_format.color_space,
+            image_format: surface_format.format,
+            image_extent: extent,
+            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            image_sharing_mode,
+            p_queue_family_indices: queue_family_indices.as_ptr(),
+            queue_family_index_count,
+            pre_transform: swapchain_support.capabilities.current_transform,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+            present_mode,
+            clipped: vk::TRUE,
+            old_swapchain: vk::SwapchainKHR::null(),
+            image_array_layers: 1,
+        };
+
+        let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, &device);
+        let swapchain = unsafe {
+            swapchain_loader
+                .create_swapchain(&swapchain_ci, None)
+                .expect("Failed to create Swapchain!")
+        };
+
+        let swapchain_images = unsafe {
+            swapchain_loader
+                .get_swapchain_images(swapchain)
+                .expect("Failed to get Swapchain Images.")
+        };
+
+        let image_views = create_image_views(&device, &swapchain_images, surface_format.format);
+
+        let mem_props = unsafe { instance.get_physical_device_memory_properties(physical_device) };
+        let depth_image_format = vk::Format::D32_SFLOAT;
+        let (depth_image, depth_image_memory) = texture::create_image(
+            &device,
+            extent.width, extent.height, 1, msaa_samples, depth_image_format,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            &mem_props,
+        );
+
+        let depth_image_view = texture::create_image_view(
+            &device, depth_image, depth_image_format, vk::ImageAspectFlags::DEPTH, 1);
+
+
+        let (msaa_color_image, msaa_color_image_memory) = texture::create_image(
+            &device,
+            extent.width, extent.height,
+            1,
+            msaa_samples,
+            surface_format.format,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            &mem_props,
+        );
+
+        let msaa_color_image_view = texture::create_image_view(
+            &device,
+            msaa_color_image,
+            surface_format.format,
+            vk::ImageAspectFlags::COLOR,
+            1,
+        );
+
+        SwapChainStuff {
+            device,
+            swapchain_loader,
+            swapchain,
+            swapchain_format: surface_format.format,
+            swapchain_extent: extent,
+            swapchain_images,
+            image_views,
+            swapchain_framebuffers: vec![],
+
+            depth_image,
+            depth_image_memory,
+            depth_image_view,
+            depth_image_format,
+
+            msaa_color_image,
+            msaa_color_image_memory,
+            msaa_color_image_view,
+        }
+    }
+
     pub fn destroy(&mut self) {
         unsafe {
             for &framebuffer in self.swapchain_framebuffers.iter() {
@@ -41,6 +174,10 @@ impl SwapChainStuff {
             self.device.destroy_image(self.depth_image, None);
             self.device.free_memory(self.depth_image_memory, None);
 
+            self.device.destroy_image_view(self.msaa_color_image_view, None);
+            self.device.destroy_image(self.msaa_color_image, None);
+            self.device.free_memory(self.msaa_color_image_memory, None);
+
             self.swapchain_loader.destroy_swapchain(self.swapchain, None);
         }
     }
@@ -49,7 +186,11 @@ impl SwapChainStuff {
         let mut framebuffers = vec![];
 
         for &image_view in self.image_views.iter() {
-            let attachments = [image_view, self.depth_image_view];
+            let attachments = [
+                self.msaa_color_image_view,
+                self.depth_image_view,
+                image_view,
+            ];
 
             let framebuffer_create_info = vk::FramebufferCreateInfo {
                 s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
@@ -103,105 +244,6 @@ pub fn query_swapchain_support(physical_device: vk::PhysicalDevice, surface_stuf
             formats,
             present_modes,
         }
-    }
-}
-
-// TODO: Remove wnd param, pass extend param instead
-pub fn create_swapchain(
-    instance: &ash::Instance,
-    device: ash::Device,
-    physical_device: vk::PhysicalDevice,
-    surface_stuff: &SurfaceStuff,
-    queue_family: &QueueFamilyIndices,
-    wnd: &Window,
-) -> SwapChainStuff {
-    let swapchain_support = query_swapchain_support(physical_device, surface_stuff);
-
-    let surface_format = choose_swapchain_format(&swapchain_support.formats);
-    let present_mode =
-        choose_swapchain_present_mode(&swapchain_support.present_modes);
-    let extent = choose_swapchain_extent(&swapchain_support.capabilities, wnd);
-
-    let image_count = swapchain_support.capabilities.min_image_count + 1;
-    let image_count = if swapchain_support.capabilities.max_image_count > 0 {
-        image_count.min(swapchain_support.capabilities.max_image_count)
-    } else {
-        image_count
-    };
-
-    let (image_sharing_mode, _, queue_family_indices) =
-        if queue_family.graphics_family != queue_family.present_family {
-            (
-                vk::SharingMode::EXCLUSIVE,
-                2,
-                vec![
-                    queue_family.graphics_family.unwrap(),
-                    queue_family.present_family.unwrap(),
-                ],
-            )
-        } else {
-            (vk::SharingMode::EXCLUSIVE, 0, vec![])
-        };
-
-    let swapchain_ci = vk::SwapchainCreateInfoKHR::builder()
-        .surface(surface_stuff.surface)
-        .min_image_count(image_count)
-        .image_color_space(surface_format.color_space)
-        .image_format(surface_format.format)
-        .image_extent(extent)
-        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-        .image_sharing_mode(image_sharing_mode)
-        .queue_family_indices(queue_family_indices.as_slice())
-        .pre_transform(swapchain_support.capabilities.current_transform)
-        .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-        .present_mode(present_mode)
-        .clipped(true)
-        .old_swapchain(vk::SwapchainKHR::null())
-        .image_array_layers(1);
-
-    let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, &device);
-    let swapchain = unsafe {
-        swapchain_loader
-            .create_swapchain(&swapchain_ci, None)
-            .expect("Failed to create Swapchain!")
-    };
-
-    let swapchain_images = unsafe {
-        swapchain_loader
-            .get_swapchain_images(swapchain)
-            .expect("Failed to get Swapchain Images.")
-    };
-
-    let image_views = create_image_views(&device, &swapchain_images, surface_format.format);
-
-    let mem_props = unsafe { instance.get_physical_device_memory_properties(physical_device) };
-    let depth_image_format = vk::Format::D32_SFLOAT;
-    let (depth_image, depth_image_memory) = texture::create_image(
-        &device,
-        extent.width, extent.height, 1, depth_image_format,
-        vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        &mem_props,
-    );
-
-    let depth_image_view = texture::create_image_view(
-        &device, depth_image, depth_image_format, vk::ImageAspectFlags::DEPTH, 1);
-
-    SwapChainStuff {
-        device,
-        swapchain_loader,
-        swapchain,
-        swapchain_format: surface_format.format,
-        swapchain_extent: extent,
-        swapchain_images,
-        image_views,
-        swapchain_framebuffers: vec![],
-
-        depth_image,
-        depth_image_memory,
-        depth_image_view,
-        depth_image_format,
     }
 }
 

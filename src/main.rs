@@ -54,6 +54,8 @@ struct HelloApplication {
     current_frame: usize,
     is_window_resized: bool,
     start_time: Instant,
+
+    msaa_samples: vk::SampleCountFlags,
 }
 
 impl HelloApplication {
@@ -78,7 +80,9 @@ impl HelloApplication {
         let physical_device = physical_device::pick_physical_device(&instance, &surface_stuff);
 
         texture::check_mipmap_support(&instance, physical_device, vk::Format::R8G8B8A8_UNORM);
-
+        let mut msaa_samples = utils::get_max_usable_sample_count(&instance, physical_device);
+        msaa_samples = vk::SampleCountFlags::TYPE_8;
+        println!("{:?}", msaa_samples);
         let (device, family_indices) = logical_device::create_logical_device(&instance, physical_device, &surface_stuff);
 
         let graphics_queue =
@@ -86,15 +90,15 @@ impl HelloApplication {
         let present_queue =
             unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
 
-        let mut swapchain_stuff = swapchain::create_swapchain(&instance, device.clone(), physical_device,
-                                                              &surface_stuff, &family_indices, wnd);
+        let mut swapchain_stuff = swapchain::SwapChainStuff::new(&instance, device.clone(), physical_device,
+                                                                 &surface_stuff, &family_indices, wnd, msaa_samples);
 
-        let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format, swapchain_stuff.depth_image_format);
+        let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format, swapchain_stuff.depth_image_format, msaa_samples);
         swapchain_stuff.create_framebuffers(&device, render_pass);
 
         let ubo_layout = uniform_buffer::create_descriptor_set_layout(&device);
 
-        let pipeline = pipeline::create_graphics_pipeline(device.clone(), render_pass, swapchain_stuff.swapchain_extent, ubo_layout);
+        let pipeline = pipeline::create_graphics_pipeline(device.clone(), render_pass, swapchain_stuff.swapchain_extent, ubo_layout, msaa_samples);
 
         let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
 
@@ -171,6 +175,7 @@ impl HelloApplication {
             is_window_resized: false,
 
             start_time: Instant::now(),
+            msaa_samples,
         }
     }
 
@@ -316,21 +321,23 @@ impl HelloApplication {
         };
         self.cleanup_swapchain();
 
-        self.swapchain_stuff = swapchain::create_swapchain(
+        self.swapchain_stuff = swapchain::SwapChainStuff::new(
             &self.instance,
             self.device.clone(),
             self.physical_device,
             &self.surface_stuff,
             &self.family_indices,
             wnd,
+            self.msaa_samples,
         );
 
-        self.render_pass = render_pass::create_render_pass(&self.device, self.swapchain_stuff.swapchain_format, self.swapchain_stuff.depth_image_format);
+        self.render_pass = render_pass::create_render_pass(&self.device, self.swapchain_stuff.swapchain_format, self.swapchain_stuff.depth_image_format, self.msaa_samples);
         self.pipeline = pipeline::create_graphics_pipeline(
             self.device.clone(),
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
             self.ubo_layout,
+            self.msaa_samples
         );
         self.swapchain_stuff.create_framebuffers(&self.device, self.render_pass);
 
