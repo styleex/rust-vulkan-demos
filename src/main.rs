@@ -76,6 +76,9 @@ impl HelloApplication {
         let surface_stuff = surface::create_surface(&entry, &instance, wnd);
 
         let physical_device = physical_device::pick_physical_device(&instance, &surface_stuff);
+
+        texture::check_mipmap_support(&instance, physical_device, vk::Format::R8G8B8A8_UNORM);
+
         let (device, family_indices) = logical_device::create_logical_device(&instance, physical_device, &surface_stuff);
 
         let graphics_queue =

@@ -94,7 +94,7 @@ impl UboBuffers {
 
     pub fn update_uniform_buffer(&self, current_image: usize, delta_time: f32) {
         let ubos = [UniformBufferObject {
-            model: Matrix4::from_angle_z(Rad::from(Deg(90.0 * delta_time))),
+            model: Matrix4::from_angle_z(Rad::from(Deg(90.0 * (delta_time/4.0)))),
             view: Matrix4::look_at_rh(
                 Point3::new(2.0, 2.0, 1.0),
                 Point3::new(0.0, 0.0, 0.0),

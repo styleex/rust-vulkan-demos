@@ -178,7 +178,7 @@ pub fn create_swapchain(
     let depth_image_format = vk::Format::D32_SFLOAT;
     let (depth_image, depth_image_memory) = texture::create_image(
         &device,
-        extent.width, extent.height, depth_image_format,
+        extent.width, extent.height, 1, depth_image_format,
         vk::ImageTiling::OPTIMAL,
         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -186,7 +186,7 @@ pub fn create_swapchain(
     );
 
     let depth_image_view = texture::create_image_view(
-        &device, depth_image, depth_image_format, vk::ImageAspectFlags::DEPTH);
+        &device, depth_image, depth_image_format, vk::ImageAspectFlags::DEPTH, 1);
 
     SwapChainStuff {
         device,
