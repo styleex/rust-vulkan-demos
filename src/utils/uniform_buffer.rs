@@ -92,20 +92,11 @@ impl UboBuffers {
         }
     }
 
-    pub fn update_uniform_buffer(&self, current_image: usize, delta_time: f32) {
+    pub fn update_uniform_buffer(&self, current_image: usize, view: Matrix4<f32>, proj: Matrix4<f32>) {
         let ubos = [UniformBufferObject {
-            model: Matrix4::from_angle_z(Rad::from(Deg(90.0 * (delta_time/4.0)))),
-            view: Matrix4::look_at_rh(
-                Point3::new(2.0, 2.0, 1.0),
-                Point3::new(0.0, 0.0, 0.0),
-                Vector3::new(0.0, 0.0, -1.0),
-            ),
-            proj: cgmath::perspective(
-                Rad::from(Deg(45.0)),
-                self.swapchain_extent.width as f32 / self.swapchain_extent.height as f32,
-                0.1,
-                10.0,
-            ),
+            model: Matrix4::from_angle_x(Rad::from(Deg(90.0))),
+            view,
+            proj,
         }];
 
         let buffer_size = (std::mem::size_of::<UniformBufferObject>() * ubos.len()) as u64;

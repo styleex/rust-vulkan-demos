@@ -16,6 +16,8 @@ use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
 
 mod utils;
+mod camera;
+mod fps_limiter;
 
 
 struct HelloApplication {
@@ -56,6 +58,7 @@ struct HelloApplication {
     start_time: Instant,
 
     msaa_samples: vk::SampleCountFlags,
+    camera: camera::Camera,
 }
 
 impl HelloApplication {
@@ -80,8 +83,8 @@ impl HelloApplication {
         let physical_device = physical_device::pick_physical_device(&instance, &surface_stuff);
 
         texture::check_mipmap_support(&instance, physical_device, vk::Format::R8G8B8A8_UNORM);
-        let mut msaa_samples = utils::get_max_usable_sample_count(&instance, physical_device);
-        msaa_samples = vk::SampleCountFlags::TYPE_8;
+        let msaa_samples = utils::get_max_usable_sample_count(&instance, physical_device);
+        // msaa_samples = vk::SampleCountFlags::TYPE_8;
         println!("{:?}", msaa_samples);
         let (device, family_indices) = logical_device::create_logical_device(&instance, physical_device, &surface_stuff);
 
@@ -104,6 +107,9 @@ impl HelloApplication {
 
         let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone(), command_pool, graphics_queue);
         let uniform_buffers = uniform_buffer::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len(), swapchain_stuff.swapchain_extent);
+
+        let mut camera = camera::Camera::new();
+        camera.set_viewport(swapchain_stuff.swapchain_extent.width, swapchain_stuff.swapchain_extent.height);
 
         // FIXME: pass me to all other funcs
         let mem_properties =
@@ -176,10 +182,13 @@ impl HelloApplication {
 
             start_time: Instant::now(),
             msaa_samples,
+            camera,
         }
     }
 
     pub fn run(&mut self, mut event_loop: EventLoop<()>, wnd: winit::window::Window) {
+        let mut tick_counter = fps_limiter::FPSLimiter::new();
+
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
@@ -196,21 +205,25 @@ impl HelloApplication {
 
                     if let WindowEvent::KeyboardInput { input, .. } = event {
                         if input.virtual_keycode.is_some() && input.virtual_keycode.unwrap() == VirtualKeyCode::Escape {
-                            *control_flow = ControlFlow::Exit
+                            *control_flow = ControlFlow::Exit;
+                            return;
                         }
-
-                        return;
                     }
 
                     if let WindowEvent::Resized(_) = event {
                         self.is_window_resized = true;
                     }
+
+                    self.camera.handle_event(&event);
                 }
                 Event::MainEventsCleared => {
                     wnd.request_redraw()
                 }
                 Event::RedrawRequested(_) => {
                     self.draw_frame(&wnd);
+
+                    print!("FPS: {}\r", tick_counter.fps());
+                    tick_counter.tick_frame();
                 }
                 // Important!
                 Event::LoopDestroyed => {
@@ -247,7 +260,8 @@ impl HelloApplication {
                 },
             }
         };
-        self.uniform_buffers.update_uniform_buffer(image_index as usize, self.start_time.elapsed().as_secs_f32());
+        self.uniform_buffers.update_uniform_buffer(image_index as usize,
+        self.camera.view_matrix(), self.camera.proj_matrix());
 
         let wait_semaphores = [self.sync.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
