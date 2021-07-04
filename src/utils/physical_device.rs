@@ -7,6 +7,7 @@ use ash::version::{InstanceV1_0, EntryV1_0};
 use std::ffi::{CString, CStr};
 use ash::extensions::khr::XlibSurface;
 use ash::extensions::ext::DebugUtils;
+use crate::utils::platforms;
 
 
 pub struct QueueFamilyIndices {
@@ -37,11 +38,7 @@ pub fn create_instance(entry: &ash::Entry, debug_enabled: bool) -> ash::Instance
         .engine_version(0)
         .api_version(vk::make_version(1, 0, 0));
 
-    let extension_names = vec![
-        ash::extensions::khr::Surface::name().as_ptr(),
-        XlibSurface::name().as_ptr(),
-        DebugUtils::name().as_ptr(),
-    ];
+    let extension_names = platforms::required_extension_names();
 
     let mut debug_utils_create_info = validation_layer::populate_debug_messenger_create_info();
     let debug_layers = vec![CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0")

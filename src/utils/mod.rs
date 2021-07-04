@@ -17,6 +17,8 @@ pub mod uniform_buffer;
 pub mod descriptor_set;
 pub mod texture;
 pub mod buffer_utils;
+pub mod platforms;
+
 
 pub fn vk_to_string(raw_string_array: &[c_char]) -> String {
     let raw_string = unsafe {
