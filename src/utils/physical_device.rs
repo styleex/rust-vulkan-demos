@@ -5,8 +5,6 @@ use crate::{utils, swapchain, validation_layer};
 use std::collections::HashSet;
 use ash::version::{InstanceV1_0, EntryV1_0};
 use std::ffi::{CString, CStr};
-use ash::extensions::khr::XlibSurface;
-use ash::extensions::ext::DebugUtils;
 use crate::utils::platforms;
 
 

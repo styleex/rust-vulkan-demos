@@ -49,51 +49,6 @@ impl Vertex {
     }
 }
 
-const VERTICES_DATA: [Vertex; 8] = [
-    Vertex {
-        pos: [-0.75, -0.75, 0.0, 1.0],
-        color: [1.0, 0.0, 0.0, 1.0],
-        tex_coord: [1.0, 0.0],
-    },
-    Vertex {
-        pos: [0.75, -0.75, 0.0, 1.0],
-        color: [0.0, 1.0, 0.0, 1.0],
-        tex_coord: [0.0, 0.0],
-    },
-    Vertex {
-        pos: [0.75, 0.75, 0.0, 1.0],
-        color: [0.0, 0.0, 1.0, 1.0],
-        tex_coord: [0.0, 1.0],
-    },
-    Vertex {
-        pos: [-0.75, 0.75, 0.0, 1.0],
-        color: [1.0, 1.0, 1.0, 1.0],
-        tex_coord: [1.0, 1.0],
-    },
-    Vertex {
-        pos: [-0.75, -0.75, -0.75, 1.0],
-        color: [1.0, 0.0, 0.0, 1.0],
-        tex_coord: [0.0, 0.0],
-    },
-    Vertex {
-        pos: [0.75, -0.75, -0.75, 1.0],
-        color: [0.0, 1.0, 0.0, 1.0],
-        tex_coord: [1.0, 0.0],
-    },
-    Vertex {
-        pos: [0.75, 0.75, -0.75, 1.0],
-        color: [0.0, 0.0, 1.0, 1.0],
-        tex_coord: [1.0, 1.0],
-    },
-    Vertex {
-        pos: [-0.75, 0.75, -0.75, 1.0],
-        color: [1.0, 1.0, 1.0, 1.0],
-        tex_coord: [0.0, 1.0],
-    },
-];
-
-const INDICES_DATA: [u32; 12] = [0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
-
 fn copy_buffer(
     device: &ash::Device,
     submit_queue: vk::Queue,

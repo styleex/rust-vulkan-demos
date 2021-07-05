@@ -2,7 +2,7 @@ use std::ptr;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use cgmath::{Deg, Matrix4, Point3, Rad, Vector3};
+use cgmath::{Deg, Matrix4, Rad};
 
 use crate::utils::buffer_utils;
 
@@ -53,7 +53,6 @@ pub struct UboBuffers {
     device: ash::Device,
     pub uniform_buffers: Vec<vk::Buffer>,
     pub uniform_buffers_memory: Vec<vk::DeviceMemory>,
-    swapchain_extent: vk::Extent2D,
 }
 
 impl UboBuffers {
@@ -62,7 +61,6 @@ impl UboBuffers {
         device: ash::Device,
         physical_device: vk::PhysicalDevice,
         swapchain_image_count: usize,
-        swapchain_extent: vk::Extent2D,
     ) -> UboBuffers {
         let buffer_size = std::mem::size_of::<UniformBufferObject>();
 
@@ -88,7 +86,6 @@ impl UboBuffers {
             device,
             uniform_buffers,
             uniform_buffers_memory,
-            swapchain_extent,
         }
     }
 

@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::ptr;
-use std::time::Instant;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -18,6 +17,7 @@ use crate::utils::texture;
 mod utils;
 mod camera;
 mod fps_limiter;
+mod framebuffer;
 
 
 struct HelloApplication {
@@ -55,7 +55,6 @@ struct HelloApplication {
 
     current_frame: usize,
     is_window_resized: bool,
-    start_time: Instant,
 
     msaa_samples: vk::SampleCountFlags,
     camera: camera::Camera,
@@ -93,8 +92,15 @@ impl HelloApplication {
         let present_queue =
             unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
 
-        let mut swapchain_stuff = swapchain::SwapChainStuff::new(&instance, device.clone(), physical_device,
-                                                                 &surface_stuff, &family_indices, wnd, msaa_samples);
+        let mut swapchain_stuff = swapchain::SwapChainStuff::new(
+            &instance,
+            device.clone(),
+            physical_device,
+            &surface_stuff,
+            &family_indices,
+            wnd.inner_size(),
+            msaa_samples,
+        );
 
         let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format, swapchain_stuff.depth_image_format, msaa_samples);
         swapchain_stuff.create_framebuffers(&device, render_pass);
@@ -106,7 +112,7 @@ impl HelloApplication {
         let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
 
         let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone(), command_pool, graphics_queue);
-        let uniform_buffers = uniform_buffer::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len(), swapchain_stuff.swapchain_extent);
+        let uniform_buffers = uniform_buffer::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len());
 
         let mut camera = camera::Camera::new();
         camera.set_viewport(swapchain_stuff.swapchain_extent.width, swapchain_stuff.swapchain_extent.height);
@@ -179,8 +185,6 @@ impl HelloApplication {
             sync,
             current_frame: 0,
             is_window_resized: false,
-
-            start_time: Instant::now(),
             msaa_samples,
             camera,
         }
@@ -261,7 +265,7 @@ impl HelloApplication {
             }
         };
         self.uniform_buffers.update_uniform_buffer(image_index as usize,
-        self.camera.view_matrix(), self.camera.proj_matrix());
+                                                   self.camera.view_matrix(), self.camera.proj_matrix());
 
         let wait_semaphores = [self.sync.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -341,17 +345,16 @@ impl HelloApplication {
             self.physical_device,
             &self.surface_stuff,
             &self.family_indices,
-            wnd,
+            wnd.inner_size(),
             self.msaa_samples,
         );
 
-        self.render_pass = render_pass::create_render_pass(&self.device, self.swapchain_stuff.swapchain_format, self.swapchain_stuff.depth_image_format, self.msaa_samples);
         self.pipeline = pipeline::create_graphics_pipeline(
             self.device.clone(),
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
             self.ubo_layout,
-            self.msaa_samples
+            self.msaa_samples,
         );
         self.swapchain_stuff.create_framebuffers(&self.device, self.render_pass);
 
@@ -385,7 +388,6 @@ impl HelloApplication {
             self.descriptor_sets.destroy();
 
             self.pipeline.destroy();
-            self.device.destroy_render_pass(self.render_pass, None);
         }
 
         self.swapchain_stuff.destroy();
@@ -402,6 +404,8 @@ impl Drop for HelloApplication {
             }
 
             self.cleanup_swapchain();
+
+            self.device.destroy_render_pass(self.render_pass, None);
 
             self.texture.destroy();
             self.device.destroy_descriptor_set_layout(self.ubo_layout, None);

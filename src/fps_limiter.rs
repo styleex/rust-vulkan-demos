@@ -5,6 +5,7 @@ use std::time::Instant;
 const SAMPLE_COUNT: usize = 5;
 const SAMPLE_COUNT_FLOAT: f32 = SAMPLE_COUNT as f32;
 
+#[allow(dead_code)]
 pub struct FPSLimiter {
     counter: Instant,
     frame_time_prefer: u32, // unit microseconds
@@ -13,6 +14,7 @@ pub struct FPSLimiter {
     delta_frame: u32,
 }
 
+#[allow(dead_code)]
 impl FPSLimiter {
     pub fn new() -> FPSLimiter {
         const DEFAULT_PREFER_FPS: f32 = 60.0;

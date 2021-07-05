@@ -2,11 +2,11 @@ use std::ptr;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
-use winit::window::Window;
 
 use crate::physical_device::QueueFamilyIndices;
 use crate::surface::SurfaceStuff;
 use crate::texture;
+use winit::dpi::PhysicalSize;
 
 pub struct SwapChainStuff {
     device: ash::Device,
@@ -30,14 +30,13 @@ pub struct SwapChainStuff {
 }
 
 impl SwapChainStuff {
-    // TODO: Remove wnd param, pass extend param instead
     pub fn new(
         instance: &ash::Instance,
         device: ash::Device,
         physical_device: vk::PhysicalDevice,
         surface_stuff: &SurfaceStuff,
         queue_family: &QueueFamilyIndices,
-        wnd: &Window,
+        size: PhysicalSize<u32>,
         msaa_samples: vk::SampleCountFlags,
     ) -> SwapChainStuff {
         let swapchain_support = query_swapchain_support(physical_device, surface_stuff);
@@ -45,7 +44,7 @@ impl SwapChainStuff {
         let surface_format = choose_swapchain_format(&swapchain_support.formats);
         let present_mode =
             choose_swapchain_present_mode(&swapchain_support.present_modes);
-        let extent = choose_swapchain_extent(&swapchain_support.capabilities, wnd);
+        let extent = choose_swapchain_extent(&swapchain_support.capabilities, size);
 
         let image_count = swapchain_support.capabilities.min_image_count + 1;
         let image_count = if swapchain_support.capabilities.max_image_count > 0 {
@@ -270,9 +269,7 @@ fn choose_swapchain_present_mode(available_present_modes: &Vec<vk::PresentModeKH
     return vk::PresentModeKHR::FIFO;
 }
 
-fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR, wnd: &Window) -> vk::Extent2D {
-    let wnd_size = wnd.inner_size();
-
+fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR, size: PhysicalSize<u32>) -> vk::Extent2D {
     if capabilities.current_extent.width != u32::max_value() {
         capabilities.current_extent
     } else {
@@ -280,12 +277,12 @@ fn choose_swapchain_extent(capabilities: &vk::SurfaceCapabilitiesKHR, wnd: &Wind
 
         vk::Extent2D {
             width: clamp(
-                wnd_size.width,
+                size.width,
                 capabilities.min_image_extent.width,
                 capabilities.max_image_extent.width,
             ),
             height: clamp(
-                wnd_size.height,
+                size.height,
                 capabilities.min_image_extent.height,
                 capabilities.max_image_extent.height,
             ),

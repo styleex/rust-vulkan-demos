@@ -2,7 +2,7 @@ use cgmath::{Deg, Matrix4, Point3, SquareMatrix, vec3, Vector3};
 use cgmath::{Angle, Rad};
 use cgmath::InnerSpace;
 use std::f32;
-use winit::event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent, Event};
+use winit::event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
     position: Point3<f32>,
