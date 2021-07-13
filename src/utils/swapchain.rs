@@ -3,10 +3,9 @@ use std::ptr;
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 
-use crate::physical_device::QueueFamilyIndices;
-use crate::surface::SurfaceStuff;
 use crate::texture;
 use winit::dpi::PhysicalSize;
+use crate::render_env::utils::SwapChainSupportDetail;
 
 pub struct SwapChainStuff {
     device: ash::Device,
@@ -34,13 +33,11 @@ impl SwapChainStuff {
         instance: &ash::Instance,
         device: ash::Device,
         physical_device: vk::PhysicalDevice,
-        surface_stuff: &SurfaceStuff,
-        queue_family: &QueueFamilyIndices,
+        surface: vk::SurfaceKHR,
         size: PhysicalSize<u32>,
         msaa_samples: vk::SampleCountFlags,
+        swapchain_support: SwapChainSupportDetail,
     ) -> SwapChainStuff {
-        let swapchain_support = query_swapchain_support(physical_device, surface_stuff);
-
         let surface_format = choose_swapchain_format(&swapchain_support.formats);
         let present_mode =
             choose_swapchain_present_mode(&swapchain_support.present_modes);
@@ -53,33 +50,20 @@ impl SwapChainStuff {
             image_count
         };
 
-        let (image_sharing_mode, queue_family_index_count, queue_family_indices) =
-            if queue_family.graphics_family != queue_family.present_family {
-                (
-                    vk::SharingMode::CONCURRENT,
-                    2,
-                    vec![
-                        queue_family.graphics_family.unwrap(),
-                        queue_family.present_family.unwrap(),
-                    ],
-                )
-            } else {
-                (vk::SharingMode::EXCLUSIVE, 0, vec![])
-            };
-
+        let queue_family_indices = vec![];
         let swapchain_ci = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             p_next: ptr::null(),
             flags: vk::SwapchainCreateFlagsKHR::empty(),
-            surface: surface_stuff.surface,
+            surface,
             min_image_count: image_count,
             image_color_space: surface_format.color_space,
             image_format: surface_format.format,
             image_extent: extent,
             image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
-            image_sharing_mode,
+            image_sharing_mode: vk::SharingMode::EXCLUSIVE,
             p_queue_family_indices: queue_family_indices.as_ptr(),
-            queue_family_index_count,
+            queue_family_index_count: 0,
             pre_transform: swapchain_support.capabilities.current_transform,
             composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
             present_mode,
@@ -213,36 +197,6 @@ impl SwapChainStuff {
         }
 
         self.swapchain_framebuffers = framebuffers;
-    }
-}
-
-pub struct SwapChainSupportDetail {
-    pub capabilities: vk::SurfaceCapabilitiesKHR,
-    pub formats: Vec<vk::SurfaceFormatKHR>,
-    pub present_modes: Vec<vk::PresentModeKHR>,
-}
-
-
-pub fn query_swapchain_support(physical_device: vk::PhysicalDevice, surface_stuff: &SurfaceStuff) -> SwapChainSupportDetail {
-    unsafe {
-        let capabilities = surface_stuff
-            .surface_loader
-            .get_physical_device_surface_capabilities(physical_device, surface_stuff.surface)
-            .expect("Failed to query for surface capabilities.");
-        let formats = surface_stuff
-            .surface_loader
-            .get_physical_device_surface_formats(physical_device, surface_stuff.surface)
-            .expect("Failed to query for surface formats.");
-        let present_modes = surface_stuff
-            .surface_loader
-            .get_physical_device_surface_present_modes(physical_device, surface_stuff.surface)
-            .expect("Failed to query for surface present mode.");
-
-        SwapChainSupportDetail {
-            capabilities,
-            formats,
-            present_modes,
-        }
     }
 }
 

@@ -7,37 +7,25 @@ use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
-use utils::{commands, descriptor_set, logical_device, physical_device, pipeline, render_pass,
-            surface, swapchain, sync, uniform_buffer, validation_layer, vertex};
+use utils::{commands, descriptor_set, pipeline, render_pass,
+            swapchain, sync, uniform_buffer, vertex};
 
-use crate::utils::physical_device::QueueFamilyIndices;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
+
+use crate::render_env::utils::{query_swapchain_support, SwapChainSupportDetail};
+use crate::render_env::env;
 
 mod utils;
 mod camera;
 mod fps_limiter;
-mod framebuffer;
+mod render_env;
 
 
 struct HelloApplication {
-    debug_enabled: bool,
+    env: env::RenderEnv,
 
-    _entry: ash::Entry,
-    instance: ash::Instance,
-
-    debug_utils_loader: ash::extensions::ext::DebugUtils,
-    debug_messenger: vk::DebugUtilsMessengerEXT,
-
-    family_indices: QueueFamilyIndices,
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
-    physical_device: vk::PhysicalDevice,
-
-    // Logical device
-    device: ash::Device,
-
-    surface_stuff: surface::SurfaceStuff,
+    swapchain_support: SwapChainSupportDetail,
     swapchain_stuff: swapchain::SwapChainStuff,
 
     render_pass: vk::RenderPass,
@@ -45,7 +33,6 @@ struct HelloApplication {
     descriptor_sets: descriptor_set::DescriptorSets,
 
     pipeline: pipeline::Pipeline,
-    command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     vertex_buffer: vertex::VertexBuffer,
     uniform_buffers: uniform_buffer::UboBuffers,
@@ -61,75 +48,48 @@ struct HelloApplication {
 }
 
 impl HelloApplication {
-    pub fn new(wnd: &winit::window::Window, debug_enabled: bool) -> HelloApplication {
-        let entry = unsafe { ash::Entry::new().unwrap() };
-        if debug_enabled {
-            println!("Debug enabled");
+    pub fn new(wnd: &winit::window::Window) -> HelloApplication {
+        let env = env::RenderEnv::new(wnd);
 
-            if !validation_layer::check_validation_layer_support(&entry) {
-                panic!("Validation layers requested, but not available");
-            }
-        } else {
-            println!("Debug disabled");
-        }
+        let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
 
-        let instance = physical_device::create_instance(&entry, debug_enabled);
-        let (debug_utils_loader, debug_messenger) =
-            validation_layer::setup_debug_utils(&entry, &instance, debug_enabled);
-
-        let surface_stuff = surface::create_surface(&entry, &instance, wnd);
-
-        let physical_device = physical_device::pick_physical_device(&instance, &surface_stuff);
-
-        texture::check_mipmap_support(&instance, physical_device, vk::Format::R8G8B8A8_UNORM);
-        let msaa_samples = utils::get_max_usable_sample_count(&instance, physical_device);
-        // msaa_samples = vk::SampleCountFlags::TYPE_8;
-        println!("{:?}", msaa_samples);
-        let (device, family_indices) = logical_device::create_logical_device(&instance, physical_device, &surface_stuff);
-
-        let graphics_queue =
-            unsafe { device.get_device_queue(family_indices.graphics_family.unwrap(), 0) };
-        let present_queue =
-            unsafe { device.get_device_queue(family_indices.present_family.unwrap(), 0) };
-
+        let swapchain_support = query_swapchain_support(&env);
         let mut swapchain_stuff = swapchain::SwapChainStuff::new(
-            &instance,
-            device.clone(),
-            physical_device,
-            &surface_stuff,
-            &family_indices,
+            env.instance(),
+            env.device().clone(),
+            env.physical_device(),
+            env.surface(),
             wnd.inner_size(),
             msaa_samples,
+            swapchain_support.clone(),
         );
 
-        let render_pass = render_pass::create_render_pass(&device, swapchain_stuff.swapchain_format, swapchain_stuff.depth_image_format, msaa_samples);
-        swapchain_stuff.create_framebuffers(&device, render_pass);
+        let render_pass = render_pass::create_render_pass(env.device(), swapchain_stuff.swapchain_format, swapchain_stuff.depth_image_format, msaa_samples);
+        swapchain_stuff.create_framebuffers(env.device(), render_pass);
 
-        let ubo_layout = uniform_buffer::create_descriptor_set_layout(&device);
+        let ubo_layout = uniform_buffer::create_descriptor_set_layout(env.device());
 
-        let pipeline = pipeline::create_graphics_pipeline(device.clone(), render_pass, swapchain_stuff.swapchain_extent, ubo_layout, msaa_samples);
+        let pipeline = pipeline::create_graphics_pipeline(env.device().clone(), render_pass, swapchain_stuff.swapchain_extent, ubo_layout, msaa_samples);
 
-        let command_pool = commands::create_command_pool(&device, family_indices.graphics_family.unwrap());
-
-        let vertex_buffer = vertex::VertexBuffer::create(&instance, physical_device, device.clone(), command_pool, graphics_queue);
-        let uniform_buffers = uniform_buffer::UboBuffers::new(&instance, device.clone(), physical_device, swapchain_stuff.swapchain_images.len());
+        let vertex_buffer = vertex::VertexBuffer::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
+        let uniform_buffers = uniform_buffer::UboBuffers::new(env.instance(), env.device().clone(), env.physical_device(), swapchain_stuff.swapchain_images.len());
 
         let mut camera = camera::Camera::new();
         camera.set_viewport(swapchain_stuff.swapchain_extent.width, swapchain_stuff.swapchain_extent.height);
 
         // FIXME: pass me to all other funcs
         let mem_properties =
-            unsafe { instance.get_physical_device_memory_properties(physical_device) };
+            unsafe { env.instance().get_physical_device_memory_properties(env.physical_device()) };
 
         let texture = texture::Texture::new(
-            device.clone(),
-            command_pool,
-            graphics_queue,
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
             &mem_properties,
             Path::new("assets/chalet.jpg"));
 
         let descriptor_sets = descriptor_set::DescriptorSets::new(
-            device.clone(),
+            env.device().clone(),
             swapchain_stuff.swapchain_images.len(),
             ubo_layout,
             &uniform_buffers.uniform_buffers,
@@ -137,8 +97,8 @@ impl HelloApplication {
         );
 
         let command_buffers = commands::create_command_buffers(
-            &device,
-            command_pool,
+            env.device(),
+            env.command_pool(),
             pipeline.graphics_pipeline,
             &swapchain_stuff.swapchain_framebuffers,
             render_pass,
@@ -150,23 +110,12 @@ impl HelloApplication {
             &descriptor_sets.descriptor_sets,
         );
 
-        let sync = sync::create_sync_objects(&device);
+        let sync = sync::create_sync_objects(env.device());
 
         HelloApplication {
-            debug_enabled,
-            instance,
-            debug_utils_loader,
-            debug_messenger,
-            device,
+            env,
 
-            surface_stuff,
-
-            _entry: entry,
-
-            family_indices,
-            graphics_queue,
-            present_queue,
-            physical_device,
+            swapchain_support,
 
             swapchain_stuff,
             render_pass,
@@ -175,7 +124,6 @@ impl HelloApplication {
 
             vertex_buffer,
 
-            command_pool,
             command_buffers,
             uniform_buffers,
             descriptor_sets,
@@ -231,7 +179,7 @@ impl HelloApplication {
                 }
                 // Important!
                 Event::LoopDestroyed => {
-                    unsafe { self.device.device_wait_idle().unwrap(); }
+                    unsafe { self.env.device().device_wait_idle().unwrap(); }
                 }
                 _ => (),
             }
@@ -242,7 +190,7 @@ impl HelloApplication {
         let wait_fences = [self.sync.inflight_fences[self.current_frame]];
 
         let (image_index, _is_sub_optimal) = unsafe {
-            self.device
+            self.env.device()
                 .wait_for_fences(&wait_fences, true, std::u64::MAX)
                 .expect("Failed to wait for Fence!");
 
@@ -284,13 +232,13 @@ impl HelloApplication {
         }];
 
         unsafe {
-            self.device
+            self.env.device()
                 .reset_fences(&wait_fences)
                 .expect("Failed to reset Fence!");
 
-            self.device
+            self.env.device()
                 .queue_submit(
-                    self.graphics_queue,
+                    self.env.queue(),
                     &submit_infos,
                     self.sync.inflight_fences[self.current_frame],
                 )
@@ -312,7 +260,7 @@ impl HelloApplication {
 
         let result = unsafe {
             self.swapchain_stuff.swapchain_loader
-                .queue_present(self.present_queue, &present_info)
+                .queue_present(self.env.queue(), &present_info)
         };
 
         let is_resized = match result {
@@ -333,33 +281,33 @@ impl HelloApplication {
 
     fn recreate_swapchain(&mut self, wnd: &winit::window::Window) {
         unsafe {
-            self.device
+            self.env.device()
                 .device_wait_idle()
                 .expect("Failed to wait device idle!")
         };
         self.cleanup_swapchain();
 
         self.swapchain_stuff = swapchain::SwapChainStuff::new(
-            &self.instance,
-            self.device.clone(),
-            self.physical_device,
-            &self.surface_stuff,
-            &self.family_indices,
+            &self.env.instance(),
+            self.env.device().clone(),
+            self.env.physical_device(),
+            self.env.surface(),
             wnd.inner_size(),
             self.msaa_samples,
+            self.swapchain_support.clone(),
         );
 
         self.pipeline = pipeline::create_graphics_pipeline(
-            self.device.clone(),
+            self.env.device().clone(),
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
             self.ubo_layout,
             self.msaa_samples,
         );
-        self.swapchain_stuff.create_framebuffers(&self.device, self.render_pass);
+        self.swapchain_stuff.create_framebuffers(self.env.device(), self.render_pass);
 
         self.descriptor_sets = descriptor_set::DescriptorSets::new(
-            self.device.clone(),
+            self.env.device().clone(),
             self.swapchain_stuff.swapchain_images.len(),
             self.ubo_layout,
             &self.uniform_buffers.uniform_buffers,
@@ -367,8 +315,8 @@ impl HelloApplication {
         );
 
         self.command_buffers = commands::create_command_buffers(
-            &self.device,
-            self.command_pool,
+            &self.env.device(),
+            self.env.command_pool(),
             self.pipeline.graphics_pipeline,
             &self.swapchain_stuff.swapchain_framebuffers,
             self.render_pass,
@@ -383,10 +331,8 @@ impl HelloApplication {
 
     fn cleanup_swapchain(&mut self) {
         unsafe {
-            self.device.free_command_buffers(self.command_pool, &self.command_buffers);
-
+            self.env.device().free_command_buffers(self.env.command_pool(), &self.command_buffers);
             self.descriptor_sets.destroy();
-
             self.pipeline.destroy();
         }
 
@@ -398,30 +344,19 @@ impl Drop for HelloApplication {
     fn drop(&mut self) {
         unsafe {
             for i in 0..MAX_FRAMES_IN_FLIGHT {
-                self.device.destroy_semaphore(self.sync.image_available_semaphores[i], None);
-                self.device.destroy_semaphore(self.sync.render_finished_semaphores[i], None);
-                self.device.destroy_fence(self.sync.inflight_fences[i], None);
+                self.env.device().destroy_semaphore(self.sync.image_available_semaphores[i], None);
+                self.env.device().destroy_semaphore(self.sync.render_finished_semaphores[i], None);
+                self.env.device().destroy_fence(self.sync.inflight_fences[i], None);
             }
 
             self.cleanup_swapchain();
 
-            self.device.destroy_render_pass(self.render_pass, None);
+            self.env.device().destroy_render_pass(self.render_pass, None);
 
             self.texture.destroy();
-            self.device.destroy_descriptor_set_layout(self.ubo_layout, None);
+            self.env.device().destroy_descriptor_set_layout(self.ubo_layout, None);
             self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();
-            self.device.destroy_command_pool(self.command_pool, None);
-
-            if self.debug_enabled {
-                self.debug_utils_loader
-                    .destroy_debug_utils_messenger(self.debug_messenger, None);
-            }
-
-            self.device.destroy_device(None);
-            self.surface_stuff.surface_loader.destroy_surface(self.surface_stuff.surface, None);
-
-            self.instance.destroy_instance(None)
         }
     }
 }
@@ -434,6 +369,6 @@ fn main() {
         .build(&event_loop)
         .expect("Failed to create window");
 
-    let mut app = HelloApplication::new(&wnd, true);
+    let mut app = HelloApplication::new(&wnd);
     app.run(event_loop, wnd);
 }

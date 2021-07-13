@@ -3,20 +3,6 @@ use std::ptr;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-pub fn create_command_pool(device: &ash::Device, queue_index: u32) -> vk::CommandPool {
-    let command_pool_create_info = vk::CommandPoolCreateInfo {
-        s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
-        p_next: ptr::null(),
-        flags: vk::CommandPoolCreateFlags::empty(),
-        queue_family_index: queue_index,
-    };
-
-    unsafe {
-        device
-            .create_command_pool(&command_pool_create_info, None)
-            .expect("Failed to create Command Pool!")
-    }
-}
 
 pub fn create_command_buffers(
     device: &ash::Device,
