@@ -50,7 +50,42 @@ fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderModule
     }
 }
 
-pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, ubo_layout: vk::DescriptorSetLayout, samples: vk::SampleCountFlags) -> Pipeline {
+
+pub fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLayout {
+    let ubo_layout_bindings = [
+        vk::DescriptorSetLayoutBinding {
+            binding: 0,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            p_immutable_samplers: ptr::null(),
+        },
+        vk::DescriptorSetLayoutBinding {
+            // sampler uniform
+            binding: 1,
+            descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            p_immutable_samplers: ptr::null(),
+        },
+    ];
+
+    let ubo_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
+        s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+        binding_count: ubo_layout_bindings.len() as u32,
+        p_bindings: ubo_layout_bindings.as_ptr(),
+    };
+
+    unsafe {
+        device
+            .create_descriptor_set_layout(&ubo_layout_create_info, None)
+            .expect("Failed to create Descriptor Set Layout!")
+    }
+}
+
+pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, descriptor_set_layout: Vec<vk::DescriptorSetLayout>, samples: vk::SampleCountFlags) -> Pipeline {
     let vert_shader_code =
         read_shader_code(Path::new("shaders/spv/09-shader-base.vert.spv"));
     let frag_shader_code =
@@ -211,16 +246,13 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
     //            dynamic_state_count: dynamic_state.len() as u32,
     //            p_dynamic_states: dynamic_state.as_ptr(),
     //        };
-    let set_layouts = [
-        ubo_layout,
-    ];
 
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineLayoutCreateFlags::empty(),
-        set_layout_count: set_layouts.len() as u32,
-        p_set_layouts: set_layouts.as_ptr(),
+        set_layout_count: descriptor_set_layout.len() as u32,
+        p_set_layouts: descriptor_set_layout.as_ptr(),
         push_constant_range_count: 0,
         p_push_constant_ranges: ptr::null(),
     };

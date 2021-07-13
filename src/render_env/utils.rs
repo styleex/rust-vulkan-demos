@@ -8,7 +8,7 @@ pub fn get_max_usable_sample_count(env: &RenderEnv) -> vk::SampleCountFlags {
     let physical_device_properties =
         unsafe { env.instance.get_physical_device_properties(env.physical_device) };
 
-    let count = std::cmp::min(
+    let max_sample_count = std::cmp::min(
         physical_device_properties
             .limits
             .framebuffer_color_sample_counts,
@@ -17,23 +17,19 @@ pub fn get_max_usable_sample_count(env: &RenderEnv) -> vk::SampleCountFlags {
             .framebuffer_depth_sample_counts,
     );
 
-    if count.contains(vk::SampleCountFlags::TYPE_64) {
-        return vk::SampleCountFlags::TYPE_64;
-    }
-    if count.contains(vk::SampleCountFlags::TYPE_32) {
-        return vk::SampleCountFlags::TYPE_32;
-    }
-    if count.contains(vk::SampleCountFlags::TYPE_16) {
-        return vk::SampleCountFlags::TYPE_16;
-    }
-    if count.contains(vk::SampleCountFlags::TYPE_8) {
-        return vk::SampleCountFlags::TYPE_8;
-    }
-    if count.contains(vk::SampleCountFlags::TYPE_4) {
-        return vk::SampleCountFlags::TYPE_4;
-    }
-    if count.contains(vk::SampleCountFlags::TYPE_2) {
-        return vk::SampleCountFlags::TYPE_2;
+    let all_samples = [
+        vk::SampleCountFlags::TYPE_64,
+        vk::SampleCountFlags::TYPE_32,
+        vk::SampleCountFlags::TYPE_16,
+        vk::SampleCountFlags::TYPE_8,
+        vk::SampleCountFlags::TYPE_4,
+        vk::SampleCountFlags::TYPE_2,
+    ];
+
+    for candidate in all_samples {
+        if max_sample_count.contains(candidate) {
+            return candidate;
+        }
     }
 
     vk::SampleCountFlags::TYPE_1
@@ -93,7 +89,7 @@ impl SwapChainSupportDetail {
     }
 
     pub fn adjust_extent(&self, size: PhysicalSize<u32>) -> vk::Extent2D {
-        if self.capabilities.current_extent.width != u32::max_value() {
+        if self.capabilities.current_extent.width != u32::MAX {
             self.capabilities.current_extent
         } else {
             use num::clamp;

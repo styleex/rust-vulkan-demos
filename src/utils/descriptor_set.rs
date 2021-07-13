@@ -12,8 +12,13 @@ pub struct DescriptorSets {
 }
 
 impl DescriptorSets {
-    pub fn new(device: ash::Device, swapchain_images_size: usize, descriptor_set_layout: vk::DescriptorSetLayout,
-               uniforms_buffers: &Vec<vk::Buffer>, texture: &texture::Texture) -> DescriptorSets {
+    pub fn new(
+        device: ash::Device,
+        swapchain_images_size: usize,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        uniforms_buffers: &Vec<vk::Buffer>,
+        texture: &texture::Texture) -> DescriptorSets
+    {
         let descriptor_pool = create_descriptor_pool(&device, swapchain_images_size);
         let descriptor_sets = create_descriptor_sets(
             &device, descriptor_pool, descriptor_set_layout, uniforms_buffers,

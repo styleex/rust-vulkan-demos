@@ -10,20 +10,25 @@ use crate::utils::platforms;
 
 #[allow(dead_code)]
 pub struct RenderEnv {
+    // core
     entry: ash::Entry,
     pub(super) instance: ash::Instance,
     pub(super) physical_device: vk::PhysicalDevice,
-
-    debug_utils_loader: ash::extensions::ext::DebugUtils,
-    debug_messenger: vk::DebugUtilsMessengerEXT,
-    pub(super) mem_properties: vk::PhysicalDeviceMemoryProperties,
     device: ash::Device,
     queue: vk::Queue,
 
     command_pool: vk::CommandPool,
 
+    // cached info
+    pub(super) mem_properties: vk::PhysicalDeviceMemoryProperties,
+
+    // surface
     pub(super) surface_loader: ash::extensions::khr::Surface,
     pub(super) surface: vk::SurfaceKHR,
+
+    // debug
+    debug_utils_loader: ash::extensions::ext::DebugUtils,
+    debug_messenger: vk::DebugUtilsMessengerEXT,
 }
 
 unsafe extern "system" fn vulkan_debug_utils_callback(
@@ -138,7 +143,7 @@ impl RenderEnv {
                 .next()
                 .expect("Couldn't find suitable device.");
 
-            let mem_properties= instance.get_physical_device_memory_properties(physical_device);
+            let mem_properties = instance.get_physical_device_memory_properties(physical_device);
             let queue_family_index = queue_family_index as u32;
 
             // logical device

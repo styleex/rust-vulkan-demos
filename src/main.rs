@@ -27,7 +27,7 @@ struct HelloApplication {
     swapchain_stuff: render_env::swapchain::SwapChainStuff,
 
     render_pass: vk::RenderPass,
-    ubo_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_sets: descriptor_set::DescriptorSets,
 
     pipeline: pipeline::Pipeline,
@@ -67,9 +67,8 @@ impl HelloApplication {
 
         swapchain_stuff.create_framebuffers(env.device(), render_pass);
 
-        let ubo_layout = uniform_buffer::create_descriptor_set_layout(env.device());
-
-        let pipeline = pipeline::create_graphics_pipeline(env.device().clone(), render_pass, swapchain_stuff.swapchain_extent, ubo_layout, msaa_samples);
+        let descriptor_set_layout = pipeline::create_descriptor_set_layout(env.device());
+        let pipeline = pipeline::create_graphics_pipeline(env.device().clone(), render_pass, swapchain_stuff.swapchain_extent, vec![descriptor_set_layout], msaa_samples);
 
         let vertex_buffer = vertex::VertexBuffer::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
         let uniform_buffers = uniform_buffer::UboBuffers::new(env.instance(), env.device().clone(), env.physical_device(), swapchain_stuff.swapchain_images.len());
@@ -91,7 +90,7 @@ impl HelloApplication {
         let descriptor_sets = descriptor_set::DescriptorSets::new(
             env.device().clone(),
             swapchain_stuff.swapchain_images.len(),
-            ubo_layout,
+            descriptor_set_layout,
             &uniform_buffers.uniform_buffers,
             &texture,
         );
@@ -117,7 +116,7 @@ impl HelloApplication {
 
             swapchain_stuff,
             render_pass,
-            ubo_layout,
+            descriptor_set_layout: descriptor_set_layout,
             pipeline,
 
             vertex_buffer,
@@ -295,7 +294,7 @@ impl HelloApplication {
             self.env.device().clone(),
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
-            self.ubo_layout,
+            vec![self.descriptor_set_layout],
             self.msaa_samples,
         );
         self.swapchain_stuff.create_framebuffers(self.env.device(), self.render_pass);
@@ -303,7 +302,7 @@ impl HelloApplication {
         self.descriptor_sets = descriptor_set::DescriptorSets::new(
             self.env.device().clone(),
             self.swapchain_stuff.swapchain_images.len(),
-            self.ubo_layout,
+            self.descriptor_set_layout,
             &self.uniform_buffers.uniform_buffers,
             &self.texture,
         );
@@ -348,7 +347,7 @@ impl Drop for HelloApplication {
             self.env.device().destroy_render_pass(self.render_pass, None);
 
             self.texture.destroy();
-            self.env.device().destroy_descriptor_set_layout(self.ubo_layout, None);
+            self.env.device().destroy_descriptor_set_layout(self.descriptor_set_layout, None);
             self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();
         }

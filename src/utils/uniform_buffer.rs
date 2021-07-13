@@ -15,40 +15,6 @@ struct UniformBufferObject {
 }
 
 
-pub fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLayout {
-    let ubo_layout_bindings = [
-        vk::DescriptorSetLayoutBinding {
-            binding: 0,
-            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 1,
-            stage_flags: vk::ShaderStageFlags::VERTEX,
-            p_immutable_samplers: ptr::null(),
-        },
-        vk::DescriptorSetLayoutBinding {
-            // sampler uniform
-            binding: 1,
-            descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            descriptor_count: 1,
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            p_immutable_samplers: ptr::null(),
-        },
-    ];
-
-    let ubo_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
-        s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        p_next: ptr::null(),
-        flags: vk::DescriptorSetLayoutCreateFlags::empty(),
-        binding_count: ubo_layout_bindings.len() as u32,
-        p_bindings: ubo_layout_bindings.as_ptr(),
-    };
-
-    unsafe {
-        device
-            .create_descriptor_set_layout(&ubo_layout_create_info, None)
-            .expect("Failed to create Descriptor Set Layout!")
-    }
-}
-
 pub struct UboBuffers {
     device: ash::Device,
     pub uniform_buffers: Vec<vk::Buffer>,
