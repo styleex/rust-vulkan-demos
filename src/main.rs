@@ -8,12 +8,11 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
 use utils::{commands, descriptor_set, pipeline, render_pass,
-            swapchain, sync, uniform_buffer, vertex};
+            sync, uniform_buffer, vertex};
 
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
 
-use crate::render_env::utils::{query_swapchain_support, SwapChainSupportDetail};
 use crate::render_env::env;
 
 mod utils;
@@ -25,8 +24,7 @@ mod render_env;
 struct HelloApplication {
     env: env::RenderEnv,
 
-    swapchain_support: SwapChainSupportDetail,
-    swapchain_stuff: swapchain::SwapChainStuff,
+    swapchain_stuff: render_env::swapchain::SwapChainStuff,
 
     render_pass: vk::RenderPass,
     ubo_layout: vk::DescriptorSetLayout,
@@ -53,18 +51,20 @@ impl HelloApplication {
 
         let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
 
-        let swapchain_support = query_swapchain_support(&env);
-        let mut swapchain_stuff = swapchain::SwapChainStuff::new(
-            env.instance(),
-            env.device().clone(),
-            env.physical_device(),
-            env.surface(),
+
+        let mut swapchain_stuff = render_env::swapchain::SwapChainStuff::new(
+            &env,
             wnd.inner_size(),
-            msaa_samples,
-            swapchain_support.clone(),
+            msaa_samples
         );
 
-        let render_pass = render_pass::create_render_pass(env.device(), swapchain_stuff.swapchain_format, swapchain_stuff.depth_image_format, msaa_samples);
+        let render_pass = render_pass::create_render_pass(
+            env.device(),
+            swapchain_stuff.swapchain_format,
+            swapchain_stuff.depth_buffer.format,
+            msaa_samples
+        );
+
         swapchain_stuff.create_framebuffers(env.device(), render_pass);
 
         let ubo_layout = uniform_buffer::create_descriptor_set_layout(env.device());
@@ -114,8 +114,6 @@ impl HelloApplication {
 
         HelloApplication {
             env,
-
-            swapchain_support,
 
             swapchain_stuff,
             render_pass,
@@ -287,14 +285,10 @@ impl HelloApplication {
         };
         self.cleanup_swapchain();
 
-        self.swapchain_stuff = swapchain::SwapChainStuff::new(
-            &self.env.instance(),
-            self.env.device().clone(),
-            self.env.physical_device(),
-            self.env.surface(),
+        self.swapchain_stuff = render_env::swapchain::SwapChainStuff::new(
+            &self.env,
             wnd.inner_size(),
-            self.msaa_samples,
-            self.swapchain_support.clone(),
+            self.msaa_samples
         );
 
         self.pipeline = pipeline::create_graphics_pipeline(

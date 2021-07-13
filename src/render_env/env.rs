@@ -216,9 +216,7 @@ impl RenderEnv {
     }
 
     #[inline]
-    pub fn device(&self) -> &ash::Device {
-        &self.device
-    }
+    pub fn device(&self) -> &ash::Device { &self.device }
 
     #[inline]
     pub fn physical_device(&self) -> vk::PhysicalDevice {

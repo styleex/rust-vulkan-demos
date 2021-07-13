@@ -4,16 +4,19 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 
 use crate::render_env::env::RenderEnv;
+use crate::render_env::utils::format_has_depth;
 
-struct AttachmentImage {
+pub struct AttachmentImage {
+    device: ash::Device,
     memory: vk::DeviceMemory,
     image: vk::Image,
-    view: vk::ImageView,
+    pub image_view: vk::ImageView,
+    pub format: vk::Format,
 }
 
 impl AttachmentImage {
-    fn new(env: &RenderEnv, size: [u32; 2], format: vk::Format, mip_levels: u32,
-           samples: vk::SampleCountFlags, usage: vk::ImageUsageFlags) -> AttachmentImage {
+    pub fn new(env: &RenderEnv, size: [u32; 2], format: vk::Format, mip_levels: u32,
+               samples: vk::SampleCountFlags, usage: vk::ImageUsageFlags) -> AttachmentImage {
         let image_create_info = vk::ImageCreateInfo {
             s_type: vk::StructureType::IMAGE_CREATE_INFO,
             p_next: ptr::null(),
@@ -68,6 +71,13 @@ impl AttachmentImage {
                 .expect("Failed to bind Image Memmory!");
         }
 
+
+        let aspect_mask = if format_has_depth(format) {
+            vk::ImageAspectFlags::DEPTH
+        } else {
+            vk::ImageAspectFlags::COLOR
+        };
+
         let imageview_create_info = vk::ImageViewCreateInfo {
             s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
             p_next: ptr::null(),
@@ -87,18 +97,29 @@ impl AttachmentImage {
                 base_array_layer: 0,
                 layer_count: 1,
             },
-            image,
+            image: texture_image,
         };
 
         let image_view = unsafe {
-            device
+            env.device()
                 .create_image_view(&imageview_create_info, None)
                 .expect("Failed to create Image View!")
-        }
+        };
 
         AttachmentImage {
+            device: env.device().clone(),
             memory: texture_image_memory,
             image: texture_image,
+            image_view,
+            format,
+        }
+    }
+
+    pub fn destroy(&self) {
+        unsafe {
+            self.device.destroy_image_view(self.image_view, None);
+            self.device.destroy_image(self.image, None);
+            self.device.free_memory(self.memory, None);
         }
     }
 }
