@@ -141,6 +141,11 @@ fn create_texture_image(
         image_height,
     );
 
+    unsafe {
+        device.destroy_buffer(staging_buffer, None);
+        device.free_memory(staging_buffer_memory, None);
+    }
+
     generate_mipmaps(
         device,
         command_pool,
@@ -150,11 +155,6 @@ fn create_texture_image(
         image_height,
         mip_levels,
     );
-
-    unsafe {
-        device.destroy_buffer(staging_buffer, None);
-        device.free_memory(staging_buffer_memory, None);
-    }
 
     (texture_image, texture_image_memory, mip_levels)
 }

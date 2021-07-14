@@ -4,8 +4,8 @@ use std::ptr;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use crate::utils::vertex;
 
+use crate::utils::vertex;
 
 pub struct Pipeline {
     device: ash::Device,
@@ -118,6 +118,22 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
             stage: vk::ShaderStageFlags::FRAGMENT,
         },
     ];
+
+    let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
+        s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::PipelineLayoutCreateFlags::empty(),
+        set_layout_count: descriptor_set_layout.len() as u32,
+        p_set_layouts: descriptor_set_layout.as_ptr(),
+        push_constant_range_count: 0,
+        p_push_constant_ranges: ptr::null(),
+    };
+
+    let pipeline_layout = unsafe {
+        device
+            .create_pipeline_layout(&pipeline_layout_create_info, None)
+            .expect("Failed to create pipeline layout!")
+    };
 
     let binding_description = vertex::Vertex::get_binding_descriptions();
     let attribute_description = vertex::Vertex::get_attribute_descriptions();
@@ -246,22 +262,6 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
     //            dynamic_state_count: dynamic_state.len() as u32,
     //            p_dynamic_states: dynamic_state.as_ptr(),
     //        };
-
-    let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
-        s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
-        p_next: ptr::null(),
-        flags: vk::PipelineLayoutCreateFlags::empty(),
-        set_layout_count: descriptor_set_layout.len() as u32,
-        p_set_layouts: descriptor_set_layout.as_ptr(),
-        push_constant_range_count: 0,
-        p_push_constant_ranges: ptr::null(),
-    };
-
-    let pipeline_layout = unsafe {
-        device
-            .create_pipeline_layout(&pipeline_layout_create_info, None)
-            .expect("Failed to create pipeline layout!")
-    };
 
     let graphic_pipeline_create_infos = [vk::GraphicsPipelineCreateInfo {
         s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,

@@ -10,10 +10,9 @@ use winit::platform::run_return::EventLoopExtRunReturn;
 use utils::{commands, descriptor_set, pipeline, render_pass,
             sync, uniform_buffer, vertex};
 
-use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
-use crate::utils::texture;
-
 use crate::render_env::env;
+use crate::utils::{shader, texture};
+use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 
 mod utils;
 mod camera;
@@ -49,20 +48,25 @@ impl HelloApplication {
     pub fn new(wnd: &winit::window::Window) -> HelloApplication {
         let env = env::RenderEnv::new(wnd);
 
-        let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
+        let sh1 = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.vert.spv");
+        let sh2 = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.frag.spv");
 
+        shader::create_descriptor_set_layout(env.device(), vec![&sh1, &sh2]);
+
+
+        let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
 
         let mut swapchain_stuff = render_env::swapchain::SwapChainStuff::new(
             &env,
             wnd.inner_size(),
-            msaa_samples
+            msaa_samples,
         );
 
         let render_pass = render_pass::create_render_pass(
             env.device(),
             swapchain_stuff.swapchain_format,
             swapchain_stuff.depth_buffer.format,
-            msaa_samples
+            msaa_samples,
         );
 
         swapchain_stuff.create_framebuffers(env.device(), render_pass);
@@ -74,9 +78,11 @@ impl HelloApplication {
         let uniform_buffers = uniform_buffer::UboBuffers::new(env.instance(), env.device().clone(), env.physical_device(), swapchain_stuff.swapchain_images.len());
 
         let mut camera = camera::Camera::new();
-        camera.set_viewport(swapchain_stuff.swapchain_extent.width, swapchain_stuff.swapchain_extent.height);
+        camera.set_viewport(
+            swapchain_stuff.swapchain_extent.width,
+            swapchain_stuff.swapchain_extent.height,
+        );
 
-        // FIXME: pass me to all other funcs
         let mem_properties =
             unsafe { env.instance().get_physical_device_memory_properties(env.physical_device()) };
 
@@ -85,7 +91,8 @@ impl HelloApplication {
             env.command_pool(),
             env.queue(),
             &mem_properties,
-            Path::new("assets/chalet.jpg"));
+            Path::new("assets/chalet.jpg"),
+        );
 
         let descriptor_sets = descriptor_set::DescriptorSets::new(
             env.device().clone(),
@@ -171,7 +178,7 @@ impl HelloApplication {
                 Event::RedrawRequested(_) => {
                     self.draw_frame(&wnd);
 
-                    print!("FPS: {}\r", tick_counter.fps());
+                    // print!("FPS: {}\r", tick_counter.fps());
                     tick_counter.tick_frame();
                 }
                 // Important!
@@ -287,7 +294,7 @@ impl HelloApplication {
         self.swapchain_stuff = render_env::swapchain::SwapChainStuff::new(
             &self.env,
             wnd.inner_size(),
-            self.msaa_samples
+            self.msaa_samples,
         );
 
         self.pipeline = pipeline::create_graphics_pipeline(

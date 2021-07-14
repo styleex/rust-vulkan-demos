@@ -8,3 +8,4 @@ pub mod descriptor_set;
 pub mod texture;
 pub mod buffer_utils;
 pub mod platforms;
+pub mod shader;

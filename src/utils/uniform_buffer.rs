@@ -1,5 +1,3 @@
-use std::ptr;
-
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use cgmath::{Deg, Matrix4, Rad};
