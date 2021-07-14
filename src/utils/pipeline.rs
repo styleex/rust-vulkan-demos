@@ -85,7 +85,7 @@ pub fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLa
     }
 }
 
-pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, descriptor_set_layout: Vec<vk::DescriptorSetLayout>, samples: vk::SampleCountFlags) -> Pipeline {
+pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, descriptor_set_layout: &Vec<vk::DescriptorSetLayout>, samples: vk::SampleCountFlags) -> Pipeline {
     let vert_shader_code =
         read_shader_code(Path::new("shaders/spv/09-shader-base.vert.spv"));
     let frag_shader_code =

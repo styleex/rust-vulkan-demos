@@ -10,6 +10,7 @@ use spirv_reflect::ShaderModule;
 use spirv_reflect::types::{ReflectDescriptorType, ReflectShaderStageFlags};
 
 pub struct Shader {
+    device: ash::Device,
     shader_module: vk::ShaderModule,
 
     // map[set][binding] = DescriptorSetLayoutBinding
@@ -122,6 +123,13 @@ impl Shader {
             descriptor_sets: sets,
             entry_point_name: module.get_entry_point_name(),
             stage_flags: shader_stage_flags,
+            device: device.clone(),
+        }
+    }
+
+    pub fn destroy(&self) {
+        unsafe {
+            self.device.destroy_shader_module(self.shader_module, None);
         }
     }
 }

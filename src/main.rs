@@ -26,7 +26,7 @@ struct HelloApplication {
     swapchain_stuff: render_env::swapchain::SwapChainStuff,
 
     render_pass: vk::RenderPass,
-    descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: Vec<vk::DescriptorSetLayout>,
     descriptor_sets: descriptor_set::DescriptorSets,
 
     pipeline: pipeline::Pipeline,
@@ -42,6 +42,8 @@ struct HelloApplication {
 
     msaa_samples: vk::SampleCountFlags,
     camera: camera::Camera,
+
+    shaders: Vec<shader::Shader>,
 }
 
 impl HelloApplication {
@@ -51,7 +53,6 @@ impl HelloApplication {
         let sh1 = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.vert.spv");
         let sh2 = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.frag.spv");
 
-        shader::create_descriptor_set_layout(env.device(), vec![&sh1, &sh2]);
 
 
         let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
@@ -71,8 +72,8 @@ impl HelloApplication {
 
         swapchain_stuff.create_framebuffers(env.device(), render_pass);
 
-        let descriptor_set_layout = pipeline::create_descriptor_set_layout(env.device());
-        let pipeline = pipeline::create_graphics_pipeline(env.device().clone(), render_pass, swapchain_stuff.swapchain_extent, vec![descriptor_set_layout], msaa_samples);
+        let descriptor_set_layout = shader::create_descriptor_set_layout(env.device(), vec![&sh1, &sh2]);
+        let pipeline = pipeline::create_graphics_pipeline(env.device().clone(), render_pass, swapchain_stuff.swapchain_extent, &descriptor_set_layout, msaa_samples);
 
         let vertex_buffer = vertex::VertexBuffer::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
         let uniform_buffers = uniform_buffer::UboBuffers::new(env.instance(), env.device().clone(), env.physical_device(), swapchain_stuff.swapchain_images.len());
@@ -97,7 +98,7 @@ impl HelloApplication {
         let descriptor_sets = descriptor_set::DescriptorSets::new(
             env.device().clone(),
             swapchain_stuff.swapchain_images.len(),
-            descriptor_set_layout,
+            descriptor_set_layout[0],
             &uniform_buffers.uniform_buffers,
             &texture,
         );
@@ -123,7 +124,7 @@ impl HelloApplication {
 
             swapchain_stuff,
             render_pass,
-            descriptor_set_layout: descriptor_set_layout,
+            descriptor_set_layout,
             pipeline,
 
             vertex_buffer,
@@ -139,6 +140,8 @@ impl HelloApplication {
             is_window_resized: false,
             msaa_samples,
             camera,
+
+            shaders: vec![sh1, sh2],
         }
     }
 
@@ -301,7 +304,7 @@ impl HelloApplication {
             self.env.device().clone(),
             self.render_pass,
             self.swapchain_stuff.swapchain_extent,
-            vec![self.descriptor_set_layout],
+            &self.descriptor_set_layout,
             self.msaa_samples,
         );
         self.swapchain_stuff.create_framebuffers(self.env.device(), self.render_pass);
@@ -309,7 +312,7 @@ impl HelloApplication {
         self.descriptor_sets = descriptor_set::DescriptorSets::new(
             self.env.device().clone(),
             self.swapchain_stuff.swapchain_images.len(),
-            self.descriptor_set_layout,
+            self.descriptor_set_layout[0],
             &self.uniform_buffers.uniform_buffers,
             &self.texture,
         );
@@ -354,7 +357,13 @@ impl Drop for HelloApplication {
             self.env.device().destroy_render_pass(self.render_pass, None);
 
             self.texture.destroy();
-            self.env.device().destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            for &descriptor_set_layout in self.descriptor_set_layout.iter() {
+                self.env.device().destroy_descriptor_set_layout(descriptor_set_layout, None);
+            }
+
+            for shader in self.shaders.iter() {
+                shader.destroy();
+            }
             self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();
         }
