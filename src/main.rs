@@ -90,7 +90,7 @@ impl HelloApplication {
         );
 
         let mut descriptor_sets = Vec::<descriptors::DescriptorSet>::new();
-        for i in 0..swapchain_stuff.swapchain_images.len() - 1 {
+        for i in 0..swapchain_stuff.swapchain_images.len() {
             descriptor_sets.push(
                 descriptors::DescriptorSetBuilder::new(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
                     .add_buffer(uniform_buffers.uniform_buffers[i])

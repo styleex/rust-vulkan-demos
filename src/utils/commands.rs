@@ -102,7 +102,7 @@ pub fn create_command_buffers(
                 graphics_pipeline,
             );
 
-            let descriptor_sets_to_bind = [descriptor_sets[0]];
+            let descriptor_sets_to_bind = [descriptor_sets[i]];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
