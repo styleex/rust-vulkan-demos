@@ -4,8 +4,6 @@ pub mod commands;
 pub mod sync;
 pub mod vertex;
 pub mod uniform_buffer;
-pub mod descriptor_set;
 pub mod texture;
 pub mod buffer_utils;
 pub mod platforms;
-pub mod shader;

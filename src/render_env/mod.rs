@@ -9,3 +9,6 @@ pub mod env;
 
 #[allow(dead_code)]
 pub mod swapchain;
+
+pub mod shader;
+pub mod descriptors;

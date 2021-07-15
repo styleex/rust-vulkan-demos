@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::fs::File;
 use std::io::Read;
 use std::ptr;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use ash::vk::{DescriptorSetLayout, DescriptorSetLayoutBinding};
+use ash::vk::{DescriptorSetLayoutBinding};
 use spirv_reflect::ShaderModule;
 use spirv_reflect::types::{ReflectDescriptorType, ReflectShaderStageFlags};
 
@@ -13,9 +14,9 @@ pub struct Shader {
     device: ash::Device,
     shader_module: vk::ShaderModule,
 
-    // map[set][binding] = DescriptorSetLayoutBinding
+    // descriptor_sets[set][binding] = DescriptorSetLayoutBinding
     descriptor_sets: HashMap<u32, HashMap<u32, DescriptorSetLayoutBinding>>,
-    entry_point_name: String,
+    entry_point_name: CString,
 
     stage_flags: vk::ShaderStageFlags,
 }
@@ -121,7 +122,7 @@ impl Shader {
         Shader {
             shader_module,
             descriptor_sets: sets,
-            entry_point_name: module.get_entry_point_name(),
+            entry_point_name: CString::new(module.get_entry_point_name()).unwrap(),
             stage_flags: shader_stage_flags,
             device: device.clone(),
         }
@@ -132,9 +133,23 @@ impl Shader {
             self.device.destroy_shader_module(self.shader_module, None);
         }
     }
+
+    pub fn stage(&self) -> vk::PipelineShaderStageCreateInfo {
+        vk::PipelineShaderStageCreateInfo {
+            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineShaderStageCreateFlags::empty(),
+            module: self.shader_module,
+            p_name: self.entry_point_name.as_ptr(),
+            p_specialization_info: ptr::null(),
+            stage: self.stage_flags,
+        }
+    }
 }
 
-fn merge_layout_bindings(shaders: Vec<&Shader>) -> Vec<Vec<DescriptorSetLayoutBinding>> {
+
+// mutual exclusive merge bindings of sets
+fn _merge_layout_bindings(shaders: Vec<&Shader>) -> Vec<Vec<DescriptorSetLayoutBinding>> {
     let mut total_sets = HashMap::<u32, HashMap<u32, DescriptorSetLayoutBinding>>::new();
 
     for shader in shaders {
@@ -153,13 +168,15 @@ fn merge_layout_bindings(shaders: Vec<&Shader>) -> Vec<Vec<DescriptorSetLayoutBi
     }
 
 
+    // sort by SET number in asc order
     let mut sorted_sets: Vec<_> = total_sets.into_iter().collect();
     sorted_sets.sort_by(|x, y| x.0.cmp(&y.0));
 
+    // convert hashmap to vector
     let mut ret = Vec::<Vec<DescriptorSetLayoutBinding>>::new();
-    for (set, bindings) in sorted_sets {
-        println!("set {}", set);
-        let ret_bindings: Vec<_> = bindings.values().copied().collect();
+    for (_set, bindings) in sorted_sets {
+        let mut ret_bindings: Vec<_> = bindings.values().copied().collect();
+        ret_bindings.sort_by(|x, y| x.binding.cmp(&y.binding));
 
         ret.push(ret_bindings);
     }
@@ -167,8 +184,15 @@ fn merge_layout_bindings(shaders: Vec<&Shader>) -> Vec<Vec<DescriptorSetLayoutBi
     ret
 }
 
-pub fn create_descriptor_set_layout(device: &ash::Device, shaders: Vec<&Shader>) -> Vec<vk::DescriptorSetLayout> {
-    let mut total_sets = merge_layout_bindings(shaders);
+pub struct DescriptorSetLayout {
+    pub layout: vk::DescriptorSetLayout,
+    pub(super)binding_desc: Vec<vk::DescriptorSetLayoutBinding>,
+}
+
+// Merge descriptor information from shaders into general list of descriptor set layout
+// (set = 0, binding = 0) + (set = 1, binding = 1) = Vec<vk::DescriptorSetLayout>.len() == 2;
+pub fn create_descriptor_set_layout(device: &ash::Device, shaders: Vec<&Shader>) -> Vec<DescriptorSetLayout> {
+    let total_sets = _merge_layout_bindings(shaders);
 
     let mut ret_layouts = Vec::<DescriptorSetLayout>::new();
     for bindings in total_sets {
@@ -185,7 +209,12 @@ pub fn create_descriptor_set_layout(device: &ash::Device, shaders: Vec<&Shader>)
                 .create_descriptor_set_layout(&descriptor_layout_create_info, None)
                 .expect("Failed to create Descriptor Set Layout!")
         };
-        ret_layouts.push(layout);
+        ret_layouts.push(
+            DescriptorSetLayout {
+                layout,
+                binding_desc: bindings,
+            }
+        );
     }
 
     ret_layouts

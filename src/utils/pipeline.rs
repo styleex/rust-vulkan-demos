@@ -1,14 +1,14 @@
-use std::ffi::CString;
-use std::path::Path;
 use std::ptr;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
 
+use crate::render_env::shader;
 use crate::utils::vertex;
 
 pub struct Pipeline {
     device: ash::Device,
+    pub descriptor_set_layouts: Vec<shader::DescriptorSetLayout>,
     pub pipeline_layout: vk::PipelineLayout,
     pub graphics_pipeline: vk::Pipeline,
 }
@@ -18,113 +18,42 @@ impl Pipeline {
         unsafe {
             self.device.destroy_pipeline(self.graphics_pipeline, None);
             self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            for descriptor_set_layout in self.descriptor_set_layouts.iter() {
+                self.device.destroy_descriptor_set_layout(descriptor_set_layout.layout, None);
+            }
         }
     }
 }
 
-
-fn read_shader_code(shader_path: &Path) -> Vec<u8> {
-    use std::fs::File;
-    use std::io::Read;
-
-    let spv_file = File::open(shader_path)
-        .expect(&format!("Failed to find spv file at {:?}", shader_path));
-    let bytes_code: Vec<u8> = spv_file.bytes().filter_map(|byte| byte.ok()).collect();
-
-    bytes_code
-}
-
-fn create_shader_module(device: &ash::Device, code: Vec<u8>) -> vk::ShaderModule {
-    let shader_module_create_info = vk::ShaderModuleCreateInfo {
-        s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
-        p_next: ptr::null(),
-        flags: vk::ShaderModuleCreateFlags::empty(),
-        code_size: code.len(),
-        p_code: code.as_ptr() as *const u32,
-    };
-
-    unsafe {
-        device
-            .create_shader_module(&shader_module_create_info, None)
-            .expect("Failed to create Shader Module!")
-    }
-}
-
-
-pub fn create_descriptor_set_layout(device: &ash::Device) -> vk::DescriptorSetLayout {
-    let ubo_layout_bindings = [
-        vk::DescriptorSetLayoutBinding {
-            binding: 0,
-            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 1,
-            stage_flags: vk::ShaderStageFlags::VERTEX,
-            p_immutable_samplers: ptr::null(),
-        },
-        vk::DescriptorSetLayoutBinding {
-            // sampler uniform
-            binding: 1,
-            descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            descriptor_count: 1,
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            p_immutable_samplers: ptr::null(),
-        },
-    ];
-
-    let ubo_layout_create_info = vk::DescriptorSetLayoutCreateInfo {
-        s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        p_next: ptr::null(),
-        flags: vk::DescriptorSetLayoutCreateFlags::empty(),
-        binding_count: ubo_layout_bindings.len() as u32,
-        p_bindings: ubo_layout_bindings.as_ptr(),
-    };
-
-    unsafe {
-        device
-            .create_descriptor_set_layout(&ubo_layout_create_info, None)
-            .expect("Failed to create Descriptor Set Layout!")
-    }
-}
-
-pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass, swapchain_extent: vk::Extent2D, descriptor_set_layout: &Vec<vk::DescriptorSetLayout>, samples: vk::SampleCountFlags) -> Pipeline {
-    let vert_shader_code =
-        read_shader_code(Path::new("shaders/spv/09-shader-base.vert.spv"));
-    let frag_shader_code =
-        read_shader_code(Path::new("shaders/spv/09-shader-base.frag.spv"));
-
-    let vert_shader_module = create_shader_module(&device, vert_shader_code);
-    let frag_shader_module = create_shader_module(&device, frag_shader_code);
-
-    let main_function_name = CString::new("main").unwrap(); // the beginning function name in shader code.
+pub fn create_graphics_pipeline(
+    device: ash::Device,
+    render_pass: vk::RenderPass,
+    samples: vk::SampleCountFlags,
+) -> Pipeline
+{
+    let vert_shader_module = shader::Shader::load(&device, "shaders/spv/09-shader-base.vert.spv");
+    let frag_shader_module = shader::Shader::load(&device, "shaders/spv/09-shader-base.frag.spv");
 
     let shader_stages = [
-        vk::PipelineShaderStageCreateInfo {
-            // Vertex Shader
-            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::PipelineShaderStageCreateFlags::empty(),
-            module: vert_shader_module,
-            p_name: main_function_name.as_ptr(),
-            p_specialization_info: ptr::null(),
-            stage: vk::ShaderStageFlags::VERTEX,
-        },
-        vk::PipelineShaderStageCreateInfo {
-            // Fragment Shader
-            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::PipelineShaderStageCreateFlags::empty(),
-            module: frag_shader_module,
-            p_name: main_function_name.as_ptr(),
-            p_specialization_info: ptr::null(),
-            stage: vk::ShaderStageFlags::FRAGMENT,
-        },
+        vert_shader_module.stage(),
+        frag_shader_module.stage(),
     ];
 
+    let descriptor_set_layouts = shader::create_descriptor_set_layout(&device, vec![
+        &vert_shader_module,
+        &frag_shader_module,
+    ]);
+
+    let layout_vec: Vec<_> = descriptor_set_layouts
+        .iter()
+        .map(|x| x.layout)
+        .collect();
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineLayoutCreateFlags::empty(),
-        set_layout_count: descriptor_set_layout.len() as u32,
-        p_set_layouts: descriptor_set_layout.as_ptr(),
+        set_layout_count: layout_vec.len() as u32,
+        p_set_layouts: layout_vec.as_ptr(),
         push_constant_range_count: 0,
         p_push_constant_ranges: ptr::null(),
     };
@@ -155,31 +84,17 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
         topology: vk::PrimitiveTopology::TRIANGLE_LIST,
     };
 
-    let viewports = [vk::Viewport {
-        x: 0.0,
-        y: 0.0,
-        width: swapchain_extent.width as f32,
-        height: swapchain_extent.height as f32,
-        min_depth: 0.0,
-        max_depth: 1.0,
-    }];
-
-    let scissors = [vk::Rect2D {
-        offset: vk::Offset2D { x: 0, y: 0 },
-        extent: swapchain_extent,
-    }];
-
     let viewport_state_create_info = vk::PipelineViewportStateCreateInfo {
         s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineViewportStateCreateFlags::empty(),
-        scissor_count: scissors.len() as u32,
-        p_scissors: scissors.as_ptr(),
-        viewport_count: viewports.len() as u32,
-        p_viewports: viewports.as_ptr(),
+        scissor_count: 1,
+        p_scissors: ptr::null(),
+        viewport_count: 1,
+        p_viewports: ptr::null(),
     };
 
-    let rasterization_statue_create_info = vk::PipelineRasterizationStateCreateInfo {
+    let rasterization_status_create_info = vk::PipelineRasterizationStateCreateInfo {
         s_type: vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::PipelineRasterizationStateCreateFlags::empty(),
@@ -254,14 +169,14 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
     };
 
     //        leaving the dynamic statue unconfigurated right now
-    //        let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-    //        let dynamic_state_info = vk::PipelineDynamicStateCreateInfo {
-    //            s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-    //            p_next: ptr::null(),
-    //            flags: vk::PipelineDynamicStateCreateFlags::empty(),
-    //            dynamic_state_count: dynamic_state.len() as u32,
-    //            p_dynamic_states: dynamic_state.as_ptr(),
-    //        };
+    let dynamic_state = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+    let dynamic_state_info = vk::PipelineDynamicStateCreateInfo {
+        s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::PipelineDynamicStateCreateFlags::empty(),
+        dynamic_state_count: dynamic_state.len() as u32,
+        p_dynamic_states: dynamic_state.as_ptr(),
+    };
 
     let graphic_pipeline_create_infos = [vk::GraphicsPipelineCreateInfo {
         s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
@@ -273,11 +188,11 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
         p_input_assembly_state: &vertex_input_assembly_state_info,
         p_tessellation_state: ptr::null(),
         p_viewport_state: &viewport_state_create_info,
-        p_rasterization_state: &rasterization_statue_create_info,
+        p_rasterization_state: &rasterization_status_create_info,
         p_multisample_state: &multisample_state_create_info,
         p_depth_stencil_state: &depth_state_create_info,
         p_color_blend_state: &color_blend_state,
-        p_dynamic_state: ptr::null(),
+        p_dynamic_state: &dynamic_state_info,
         layout: pipeline_layout,
         render_pass,
         subpass: 0,
@@ -295,14 +210,13 @@ pub fn create_graphics_pipeline(device: ash::Device, render_pass: vk::RenderPass
             .expect("Failed to create Graphics Pipeline!.")
     };
 
-    unsafe {
-        device.destroy_shader_module(vert_shader_module, None);
-        device.destroy_shader_module(frag_shader_module, None);
-    }
+    vert_shader_module.destroy();
+    frag_shader_module.destroy();
 
     Pipeline {
         device,
         graphics_pipeline: graphics_pipelines[0],
         pipeline_layout,
+        descriptor_set_layouts,
     }
 }

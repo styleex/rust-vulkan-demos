@@ -7,6 +7,7 @@ use ash::vk;
 use image::GenericImageView;
 
 use crate::utils::buffer_utils;
+use std::time::Instant;
 
 pub struct Texture {
     device: ash::Device,
@@ -61,7 +62,9 @@ fn create_texture_image(
     submit_queue: vk::Queue,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
     image_path: &Path,
-) -> (vk::Image, vk::DeviceMemory, u32) {
+) -> (vk::Image, vk::DeviceMemory, u32)
+{
+    let t1 = Instant::now();
     let mut image_object = image::open(image_path).unwrap();
     image_object = image_object.flipv();
 
@@ -71,6 +74,7 @@ fn create_texture_image(
         | image::DynamicImage::ImageRgba8(_) => image_object.to_rgba8().into_raw(),
         _ => image_object.to_rgba8().into_raw(),
     };
+    println!("Elapsed: {}", t1.elapsed().as_millis());
 
     let (image_width, image_height) = (image_object.width(), image_object.height());
     let image_size = (std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;

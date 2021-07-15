@@ -3,7 +3,6 @@ use std::ptr;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-
 pub fn create_command_buffers(
     device: &ash::Device,
     command_pool: vk::CommandPool,
@@ -15,7 +14,8 @@ pub fn create_command_buffers(
     index_buffer: vk::Buffer,
     index_count: usize,
     pipeline_layout: vk::PipelineLayout,
-    descriptor_sets: &Vec<vk::DescriptorSet>,
+    descriptor_sets: Vec<vk::DescriptorSet>,
+    swapchain_extent: vk::Extent2D,
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
@@ -73,6 +73,24 @@ pub fn create_command_buffers(
         };
 
         unsafe {
+            let viewports = [vk::Viewport {
+                x: 0.0,
+                y: 0.0,
+                width: swapchain_extent.width as f32,
+                height: swapchain_extent.height as f32,
+                min_depth: 0.0,
+                max_depth: 1.0,
+            }];
+
+            let scissors = [vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: swapchain_extent,
+            }];
+
+
+            device.cmd_set_viewport(command_buffer, 0, viewports.as_ref());
+            device.cmd_set_scissor(command_buffer, 0, scissors.as_ref());
+
             device.cmd_begin_render_pass(
                 command_buffer,
                 &render_pass_begin_info,
@@ -84,7 +102,7 @@ pub fn create_command_buffers(
                 graphics_pipeline,
             );
 
-            let descriptor_sets_to_bind = [descriptor_sets[i]];
+            let descriptor_sets_to_bind = [descriptor_sets[0]];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,

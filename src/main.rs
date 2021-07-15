@@ -7,12 +7,12 @@ use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
-use utils::{commands, descriptor_set, pipeline, render_pass,
+use utils::{commands, pipeline, render_pass,
             sync, uniform_buffer, vertex};
 
-use crate::render_env::env;
-use crate::utils::{shader, texture};
+use crate::render_env::{descriptors, env};
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
+use crate::utils::texture;
 
 mod utils;
 mod camera;
@@ -26,8 +26,7 @@ struct HelloApplication {
     swapchain_stuff: render_env::swapchain::SwapChainStuff,
 
     render_pass: vk::RenderPass,
-    descriptor_set_layout: Vec<vk::DescriptorSetLayout>,
-    descriptor_sets: descriptor_set::DescriptorSets,
+    descriptor_sets: Vec<descriptors::DescriptorSet>,
 
     pipeline: pipeline::Pipeline,
     command_buffers: Vec<vk::CommandBuffer>,
@@ -42,18 +41,11 @@ struct HelloApplication {
 
     msaa_samples: vk::SampleCountFlags,
     camera: camera::Camera,
-
-    shaders: Vec<shader::Shader>,
 }
 
 impl HelloApplication {
     pub fn new(wnd: &winit::window::Window) -> HelloApplication {
         let env = env::RenderEnv::new(wnd);
-
-        let sh1 = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.vert.spv");
-        let sh2 = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.frag.spv");
-
-
 
         let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
 
@@ -72,10 +64,12 @@ impl HelloApplication {
 
         swapchain_stuff.create_framebuffers(env.device(), render_pass);
 
-        let descriptor_set_layout = shader::create_descriptor_set_layout(env.device(), vec![&sh1, &sh2]);
-        let pipeline = pipeline::create_graphics_pipeline(env.device().clone(), render_pass, swapchain_stuff.swapchain_extent, &descriptor_set_layout, msaa_samples);
+        let pipeline = pipeline::create_graphics_pipeline(
+            env.device().clone(), render_pass, msaa_samples,
+        );
 
         let vertex_buffer = vertex::VertexBuffer::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
+
         let uniform_buffers = uniform_buffer::UboBuffers::new(env.instance(), env.device().clone(), env.physical_device(), swapchain_stuff.swapchain_images.len());
 
         let mut camera = camera::Camera::new();
@@ -95,13 +89,15 @@ impl HelloApplication {
             Path::new("assets/chalet.jpg"),
         );
 
-        let descriptor_sets = descriptor_set::DescriptorSets::new(
-            env.device().clone(),
-            swapchain_stuff.swapchain_images.len(),
-            descriptor_set_layout[0],
-            &uniform_buffers.uniform_buffers,
-            &texture,
-        );
+        let mut descriptor_sets = Vec::<descriptors::DescriptorSet>::new();
+        for i in 0..swapchain_stuff.swapchain_images.len() - 1 {
+            descriptor_sets.push(
+                descriptors::DescriptorSetBuilder::new(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
+                    .add_buffer(uniform_buffers.uniform_buffers[i])
+                    .add_image(texture.texture_image_view, texture.texture_sampler)
+                    .build()
+            );
+        }
 
         let command_buffers = commands::create_command_buffers(
             env.device(),
@@ -114,7 +110,8 @@ impl HelloApplication {
             vertex_buffer.index_buffer,
             vertex_buffer.index_count,
             pipeline.pipeline_layout,
-            &descriptor_sets.descriptor_sets,
+            descriptor_sets.iter().map(|x| x.set).collect(),
+            swapchain_stuff.swapchain_extent,
         );
 
         let sync = sync::create_sync_objects(env.device());
@@ -124,7 +121,6 @@ impl HelloApplication {
 
             swapchain_stuff,
             render_pass,
-            descriptor_set_layout,
             pipeline,
 
             vertex_buffer,
@@ -140,8 +136,6 @@ impl HelloApplication {
             is_window_resized: false,
             msaa_samples,
             camera,
-
-            shaders: vec![sh1, sh2],
         }
     }
 
@@ -300,22 +294,7 @@ impl HelloApplication {
             self.msaa_samples,
         );
 
-        self.pipeline = pipeline::create_graphics_pipeline(
-            self.env.device().clone(),
-            self.render_pass,
-            self.swapchain_stuff.swapchain_extent,
-            &self.descriptor_set_layout,
-            self.msaa_samples,
-        );
         self.swapchain_stuff.create_framebuffers(self.env.device(), self.render_pass);
-
-        self.descriptor_sets = descriptor_set::DescriptorSets::new(
-            self.env.device().clone(),
-            self.swapchain_stuff.swapchain_images.len(),
-            self.descriptor_set_layout[0],
-            &self.uniform_buffers.uniform_buffers,
-            &self.texture,
-        );
 
         self.command_buffers = commands::create_command_buffers(
             &self.env.device(),
@@ -328,15 +307,14 @@ impl HelloApplication {
             self.vertex_buffer.index_buffer,
             self.vertex_buffer.index_count,
             self.pipeline.pipeline_layout,
-            &self.descriptor_sets.descriptor_sets,
+            self.descriptor_sets.iter().map(|x| x.set).collect(),
+            self.swapchain_stuff.swapchain_extent,
         );
     }
 
     fn cleanup_swapchain(&mut self) {
         unsafe {
             self.env.device().free_command_buffers(self.env.command_pool(), &self.command_buffers);
-            self.descriptor_sets.destroy();
-            self.pipeline.destroy();
         }
 
         self.swapchain_stuff.destroy();
@@ -354,16 +332,16 @@ impl Drop for HelloApplication {
 
             self.cleanup_swapchain();
 
+            for set in self.descriptor_sets.iter() {
+                set.destroy();
+            }
+
+            self.pipeline.destroy();
+
             self.env.device().destroy_render_pass(self.render_pass, None);
 
             self.texture.destroy();
-            for &descriptor_set_layout in self.descriptor_set_layout.iter() {
-                self.env.device().destroy_descriptor_set_layout(descriptor_set_layout, None);
-            }
 
-            for shader in self.shaders.iter() {
-                shader.destroy();
-            }
             self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();
         }

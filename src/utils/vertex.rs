@@ -216,6 +216,8 @@ impl VertexBuffer {
             vk::BufferUsageFlags::INDEX_BUFFER,
             indices);
 
+     println!("Model uploaded: {}", t1.elapsed().as_secs_f32());
+
         VertexBuffer {
             device,
 
