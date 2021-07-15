@@ -6,7 +6,7 @@ use ash::vk;
 use ash::vk::{ApplicationInfo, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCreateFlagsEXT, DebugUtilsMessengerCreateInfoEXT};
 use winit::window::Window;
 
-use crate::utils::platforms;
+use super::platforms;
 
 #[allow(dead_code)]
 pub struct RenderEnv {

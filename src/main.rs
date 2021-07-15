@@ -110,8 +110,7 @@ impl HelloApplication {
             vertex_buffer.index_buffer,
             vertex_buffer.index_count,
             pipeline.pipeline_layout,
-            descriptor_sets.iter().map(|x| x.set).collect(),
-            swapchain_stuff.swapchain_extent,
+            descriptor_sets.iter().map(|x| x.set).collect()
         );
 
         let sync = sync::create_sync_objects(env.device());
@@ -307,8 +306,7 @@ impl HelloApplication {
             self.vertex_buffer.index_buffer,
             self.vertex_buffer.index_count,
             self.pipeline.pipeline_layout,
-            self.descriptor_sets.iter().map(|x| x.set).collect(),
-            self.swapchain_stuff.swapchain_extent,
+            self.descriptor_sets.iter().map(|x| x.set).collect()
         );
     }
 

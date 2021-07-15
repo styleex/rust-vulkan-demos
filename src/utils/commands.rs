@@ -5,17 +5,26 @@ use ash::vk;
 
 pub fn create_command_buffers(
     device: &ash::Device,
+
+    // memory management
     command_pool: vk::CommandPool,
+
+    // pipeline
     graphics_pipeline: vk::Pipeline,
+
+    // Render pass
     framebuffers: &Vec<vk::Framebuffer>,
     render_pass: vk::RenderPass,
     surface_extent: vk::Extent2D,
+
+    // Mesh
     vertex_buffer: vk::Buffer,
     index_buffer: vk::Buffer,
     index_count: usize,
+
+    // Shader uniforms
     pipeline_layout: vk::PipelineLayout,
     descriptor_sets: Vec<vk::DescriptorSet>,
-    swapchain_extent: vk::Extent2D,
 ) -> Vec<vk::CommandBuffer> {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
@@ -76,15 +85,15 @@ pub fn create_command_buffers(
             let viewports = [vk::Viewport {
                 x: 0.0,
                 y: 0.0,
-                width: swapchain_extent.width as f32,
-                height: swapchain_extent.height as f32,
+                width: surface_extent.width as f32,
+                height: surface_extent.height as f32,
                 min_depth: 0.0,
                 max_depth: 1.0,
             }];
 
             let scissors = [vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
-                extent: swapchain_extent,
+                extent: surface_extent,
             }];
 
 

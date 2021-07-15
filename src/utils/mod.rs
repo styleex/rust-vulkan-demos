@@ -6,4 +6,3 @@ pub mod vertex;
 pub mod uniform_buffer;
 pub mod texture;
 pub mod buffer_utils;
-pub mod platforms;
