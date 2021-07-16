@@ -24,7 +24,7 @@ Plan:
 # Requirements
 
 * Linux or MacOS
-* vulkan sdk
+* [Vulkan SDK](https://vulkan.lunarg.com/doc/view/1.1.126.0/linux/getting_started.html#user-content-download-and-install-packages-for-building-binaries)
 * rust stable
 * glslc
 
