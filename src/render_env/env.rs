@@ -17,7 +17,7 @@ pub struct RenderEnv {
     device: ash::Device,
     queue: vk::Queue,
 
-    command_pool: vk::CommandPool,
+    pub(super) command_pool: vk::CommandPool,
 
     // cached info
     pub(super) mem_properties: vk::PhysicalDeviceMemoryProperties,

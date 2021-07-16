@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::time;
+use std::{time};
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -190,7 +190,8 @@ impl VertexBuffer {
                   device: ash::Device,
                   command_pool: vk::CommandPool,
                   submit_queue: vk::Queue,
-    ) -> VertexBuffer {
+    ) -> VertexBuffer
+    {
         let t1 = time::Instant::now();
         let (vertices, indices) = load_model(Path::new("assets/chalet2.obj"));
         // let (vertices, indices) = (VERTICES_DATA.to_vec(), INDICES_DATA.to_vec());

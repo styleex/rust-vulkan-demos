@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::ptr;
+use std::sync::Arc;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -10,7 +11,7 @@ use winit::platform::run_return::EventLoopExtRunReturn;
 use utils::{commands, pipeline, render_pass,
             sync, uniform_buffer, vertex};
 
-use crate::render_env::{descriptors, env};
+use crate::render_env::{descriptors, env, frame_buffer};
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
 
@@ -21,9 +22,9 @@ mod render_env;
 
 
 struct HelloApplication {
-    env: env::RenderEnv,
+    env: Arc<env::RenderEnv>,
 
-    swapchain_stuff: render_env::swapchain::SwapChainStuff,
+    swapchain_stuff: render_env::swapchain::SwapChain,
 
     render_pass: vk::RenderPass,
     descriptor_sets: Vec<descriptors::DescriptorSet>,
@@ -41,15 +42,26 @@ struct HelloApplication {
 
     msaa_samples: vk::SampleCountFlags,
     camera: camera::Camera,
+
+    framebuffer: frame_buffer::FrameBuffer,
+    second_buffer: vk::CommandBuffer,
+    pipeline_second: pipeline::Pipeline,
+    descriptor_set_second: descriptors::DescriptorSet,
+
+    quad_pipeline: pipeline::Pipeline,
+    quad_render_pass: vk::RenderPass,
+    quad_descriptors: Vec<descriptors::DescriptorSet>,
+
+    quad_command_buffers: Vec<vk::CommandBuffer>,
 }
 
 impl HelloApplication {
     pub fn new(wnd: &winit::window::Window) -> HelloApplication {
-        let env = env::RenderEnv::new(wnd);
+        let env = Arc::new(env::RenderEnv::new(wnd));
 
         let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
 
-        let mut swapchain_stuff = render_env::swapchain::SwapChainStuff::new(
+        let mut swapchain_stuff = render_env::swapchain::SwapChain::new(
             &env,
             wnd.inner_size(),
             msaa_samples,
@@ -57,7 +69,7 @@ impl HelloApplication {
 
         let render_pass = render_pass::create_render_pass(
             env.device(),
-            swapchain_stuff.swapchain_format,
+            swapchain_stuff.format,
             swapchain_stuff.depth_buffer.format,
             msaa_samples,
         );
@@ -70,12 +82,12 @@ impl HelloApplication {
 
         let vertex_buffer = vertex::VertexBuffer::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
 
-        let uniform_buffers = uniform_buffer::UboBuffers::new(env.instance(), env.device().clone(), env.physical_device(), swapchain_stuff.swapchain_images.len());
+        let uniform_buffers = uniform_buffer::UboBuffers::new(env.instance(), env.device().clone(), env.physical_device(), swapchain_stuff.images.len());
 
         let mut camera = camera::Camera::new();
         camera.set_viewport(
-            swapchain_stuff.swapchain_extent.width,
-            swapchain_stuff.swapchain_extent.height,
+            swapchain_stuff.size.width,
+            swapchain_stuff.size.height,
         );
 
         let mem_properties =
@@ -90,7 +102,7 @@ impl HelloApplication {
         );
 
         let mut descriptor_sets = Vec::<descriptors::DescriptorSet>::new();
-        for i in 0..swapchain_stuff.swapchain_images.len() {
+        for i in 0..swapchain_stuff.images.len() {
             descriptor_sets.push(
                 descriptors::DescriptorSetBuilder::new(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
                     .add_buffer(uniform_buffers.uniform_buffers[i])
@@ -99,19 +111,85 @@ impl HelloApplication {
             );
         }
 
+        let dimensions = [swapchain_stuff.size.width, swapchain_stuff.size.height];
+        let mut framebuffer = frame_buffer::FrameBuffer::new(env.clone(), vec!(
+            frame_buffer::AttachmentDesciption {
+                samples_count: msaa_samples,
+                format: vk::Format::R8G8B8A8_SRGB,
+            },
+            frame_buffer::AttachmentDesciption {
+                samples_count: msaa_samples,
+                format: vk::Format::D32_SFLOAT,
+            },
+        ));
+        framebuffer.resize_swapchain(dimensions);
+
         let command_buffers = commands::create_command_buffers(
             env.device(),
             env.command_pool(),
             pipeline.graphics_pipeline,
-            &swapchain_stuff.swapchain_framebuffers,
+            &swapchain_stuff.framebuffers,
             render_pass,
-            swapchain_stuff.swapchain_extent,
+            swapchain_stuff.size,
             vertex_buffer.vertex_buffer,
             vertex_buffer.index_buffer,
             vertex_buffer.index_count,
             pipeline.pipeline_layout,
             descriptor_sets.iter().map(|x| x.set).collect(),
         );
+
+        let pipeline_second = pipeline::create_graphics_pipeline(
+            env.device().clone(), framebuffer.render_pass(), msaa_samples,
+        );
+        let descriptor_set_second = descriptors::DescriptorSetBuilder::new(
+            env.device(), pipeline_second.descriptor_set_layouts.get(0).unwrap())
+            .add_buffer(uniform_buffers.uniform_buffers[0])
+            .add_image(texture.texture_image_view, texture.texture_sampler)
+            .build();
+
+        let second_buffer = commands::create_second_command_buffers(
+            env.device(),
+            env.command_pool(),
+            pipeline_second.graphics_pipeline,
+            framebuffer.render_pass(),
+            swapchain_stuff.size,
+            vertex_buffer.vertex_buffer,
+            vertex_buffer.index_buffer,
+            vertex_buffer.index_count,
+            pipeline_second.pipeline_layout,
+            descriptor_set_second.set,
+        );
+
+        let quad_render_pass = render_pass::create_quad_render_pass(env.device(), swapchain_stuff.format);
+        let quad_pipeline = pipeline::create_quad_graphics_pipeline(
+            env.device().clone(), quad_render_pass, vk::SampleCountFlags::TYPE_1,
+        );
+
+
+        let mut quad_descriptors = Vec::new();
+        for img_view in swapchain_stuff.image_views.iter() {
+            quad_descriptors.push(
+                descriptors::DescriptorSetBuilder::new(
+                    env.device(), quad_pipeline.descriptor_set_layouts.get(0).unwrap())
+                    .add_image(framebuffer.attachments.get(0).unwrap().view, texture.texture_sampler)
+                    .build()
+            );
+        }
+
+        // FIXME: framebuffer contains msaa. For quad need custom framebuffer without msaa.
+        let quad_command_buffers = commands::create_quad_command_buffers(
+            env.device(),
+
+            env.command_pool(),
+            quad_pipeline.graphics_pipeline,
+            &swapchain_stuff.framebuffers,
+            quad_render_pass,
+            swapchain_stuff.size,
+            quad_pipeline.pipeline_layout,
+            quad_descriptors.iter().map(|x| x.set).collect(),
+        );
+
+        println!("created");
 
         let sync = sync::create_sync_objects(env.device());
 
@@ -135,6 +213,17 @@ impl HelloApplication {
             is_window_resized: false,
             msaa_samples,
             camera,
+
+            framebuffer,
+            second_buffer,
+            pipeline_second,
+            descriptor_set_second,
+
+            quad_render_pass,
+            quad_pipeline,
+            quad_descriptors,
+
+            quad_command_buffers,
         }
     }
 
@@ -194,7 +283,7 @@ impl HelloApplication {
                 .wait_for_fences(&wait_fences, true, std::u64::MAX)
                 .expect("Failed to wait for Fence!");
 
-            let result = self.swapchain_stuff.swapchain_loader
+            let result = self.swapchain_stuff.swapchain_api
                 .acquire_next_image(
                     self.swapchain_stuff.swapchain,
                     std::u64::MAX,
@@ -219,17 +308,22 @@ impl HelloApplication {
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let signal_semaphores = [self.sync.render_finished_semaphores[self.current_frame]];
 
-        let submit_infos = [vk::SubmitInfo {
-            s_type: vk::StructureType::SUBMIT_INFO,
-            p_next: ptr::null(),
-            wait_semaphore_count: wait_semaphores.len() as u32,
-            p_wait_semaphores: wait_semaphores.as_ptr(),
-            p_wait_dst_stage_mask: wait_stages.as_ptr(),
-            command_buffer_count: 1,
-            p_command_buffers: &self.command_buffers[image_index as usize],
-            signal_semaphore_count: signal_semaphores.len() as u32,
-            p_signal_semaphores: signal_semaphores.as_ptr(),
-        }];
+        let cmd_buf = frame_buffer::draw_to_framebuffer(&self.env, &self.framebuffer,
+                                                        |cmd| {});
+
+        let submit_infos = [
+            vk::SubmitInfo {
+                s_type: vk::StructureType::SUBMIT_INFO,
+                p_next: ptr::null(),
+                wait_semaphore_count: wait_semaphores.len() as u32,
+                p_wait_semaphores: wait_semaphores.as_ptr(),
+                p_wait_dst_stage_mask: wait_stages.as_ptr(),
+                command_buffer_count: 2,
+                p_command_buffers: [self.command_buffers[image_index as usize], cmd_buf].as_ptr(),
+                signal_semaphore_count: signal_semaphores.len() as u32,
+                p_signal_semaphores: signal_semaphores.as_ptr(),
+            }
+        ];
 
         unsafe {
             self.env.device()
@@ -259,7 +353,7 @@ impl HelloApplication {
         };
 
         let result = unsafe {
-            self.swapchain_stuff.swapchain_loader
+            self.swapchain_stuff.swapchain_api
                 .queue_present(self.env.queue(), &present_info)
         };
 
@@ -287,21 +381,23 @@ impl HelloApplication {
         };
         self.cleanup_swapchain();
 
-        self.swapchain_stuff = render_env::swapchain::SwapChainStuff::new(
+        self.swapchain_stuff = render_env::swapchain::SwapChain::new(
             &self.env,
             wnd.inner_size(),
             self.msaa_samples,
         );
-
         self.swapchain_stuff.create_framebuffers(self.env.device(), self.render_pass);
+
+        let dimensions = [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height];
+        self.framebuffer.resize_swapchain(dimensions);
 
         self.command_buffers = commands::create_command_buffers(
             &self.env.device(),
             self.env.command_pool(),
             self.pipeline.graphics_pipeline,
-            &self.swapchain_stuff.swapchain_framebuffers,
+            &self.swapchain_stuff.framebuffers,
             self.render_pass,
-            self.swapchain_stuff.swapchain_extent,
+            self.swapchain_stuff.size,
             self.vertex_buffer.vertex_buffer,
             self.vertex_buffer.index_buffer,
             self.vertex_buffer.index_count,
@@ -335,7 +431,15 @@ impl Drop for HelloApplication {
             }
 
             self.pipeline.destroy();
+            self.quad_pipeline.destroy();
+            for set in self.quad_descriptors.iter() {
+                set.destroy();
+            }
 
+            self.descriptor_set_second.destroy();
+            self.pipeline_second.destroy();
+
+            self.framebuffer.destroy();
             self.env.device().destroy_render_pass(self.render_pass, None);
 
             self.texture.destroy();

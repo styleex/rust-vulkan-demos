@@ -10,7 +10,7 @@ pub struct AttachmentImage {
     device: ash::Device,
     memory: vk::DeviceMemory,
     image: vk::Image,
-    pub image_view: vk::ImageView,
+    pub view: vk::ImageView,
     pub format: vk::Format,
 }
 
@@ -110,14 +110,14 @@ impl AttachmentImage {
             device: env.device().clone(),
             memory: texture_image_memory,
             image: texture_image,
-            image_view,
+            view: image_view,
             format,
         }
     }
 
     pub fn destroy(&self) {
         unsafe {
-            self.device.destroy_image_view(self.image_view, None);
+            self.device.destroy_image_view(self.view, None);
             self.device.destroy_image(self.image, None);
             self.device.free_memory(self.memory, None);
         }

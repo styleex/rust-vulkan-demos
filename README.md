@@ -13,6 +13,8 @@ Plan:
     
     * Framebuffer + attachment image for simplifying offscreen buffer creation.
 
+* Imgui integration 
+  
 * Deferred shading pipeline 
 
 * HDRR pipeline

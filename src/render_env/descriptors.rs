@@ -19,6 +19,10 @@ impl DescriptorSet {
     }
 }
 
+// From existing shader::DescriptorSetLayout:
+//  1. Create pool with descriptors
+//  2. Bind resources to descriptors (add_buffer(..), add_image(..) etc.) with simple validation
+//  3. allocate descriptors from pool and write it
 pub struct DescriptorSetBuilder {
     device: ash::Device,
     pool: vk::DescriptorPool,
@@ -32,18 +36,6 @@ pub struct DescriptorSetBuilder {
 
 impl DescriptorSetBuilder {
     pub fn new(device: &ash::Device, layout: &shader::DescriptorSetLayout) -> DescriptorSetBuilder {
-        let pool_sizes = [
-            vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::UNIFORM_BUFFER,
-                descriptor_count: 1,
-            },
-            vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                descriptor_count: 1,
-            }
-        ];
-
-
         let mut pool_sizes = Vec::<vk::DescriptorPoolSize>::new();
         for binding in layout.binding_desc.iter() {
             pool_sizes.push(
@@ -93,12 +85,14 @@ impl DescriptorSetBuilder {
             }
         );
 
+        self.current_binding += 1;
         self
     }
 
     pub fn add_image(&mut self, image_view: vk::ImageView, sampler: vk::Sampler) -> &mut Self {
         let desc = self.binding_desc.get(self.current_binding).unwrap();
-        if [vk::DescriptorType::SAMPLED_IMAGE, vk::DescriptorType::COMBINED_IMAGE_SAMPLER].contains(&desc.descriptor_type) {
+
+        if ![vk::DescriptorType::SAMPLED_IMAGE, vk::DescriptorType::COMBINED_IMAGE_SAMPLER].contains(&desc.descriptor_type) {
             panic!("Invalid value for descriptor {}: expected {:?}, found image", desc.binding, desc.descriptor_type);
         }
 
@@ -109,6 +103,8 @@ impl DescriptorSetBuilder {
                 image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             }
         );
+
+        self.current_binding += 1;
 
         self
     }
