@@ -74,10 +74,14 @@ impl HelloApplication {
             msaa_samples,
         );
 
-        swapchain_stuff.create_framebuffers(env.device(), render_pass);
+        let quad_render_pass = render_pass::create_quad_render_pass(env.device(), swapchain_stuff.format);
+        swapchain_stuff.create_framebuffers(env.device(), quad_render_pass);
 
-        let pipeline = pipeline::create_graphics_pipeline(
-            env.device().clone(), render_pass, msaa_samples,
+        // let pipeline = pipeline::create_graphics_pipeline(
+        //     env.device().clone(), render_pass, msaa_samples,
+        // );
+        let pipeline = pipeline::create_quad_graphics_pipeline(
+            env.device().clone(), quad_render_pass, vk::SampleCountFlags::TYPE_1,
         );
 
         let vertex_buffer = vertex::VertexBuffer::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
@@ -105,7 +109,7 @@ impl HelloApplication {
         for i in 0..swapchain_stuff.images.len() {
             descriptor_sets.push(
                 descriptors::DescriptorSetBuilder::new(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
-                    .add_buffer(uniform_buffers.uniform_buffers[i])
+                    // .add_buffer(uniform_buffers.uniform_buffers[i])
                     .add_image(texture.texture_image_view, texture.texture_sampler)
                     .build()
             );
@@ -123,20 +127,6 @@ impl HelloApplication {
             },
         ));
         framebuffer.resize_swapchain(dimensions);
-
-        let command_buffers = commands::create_command_buffers(
-            env.device(),
-            env.command_pool(),
-            pipeline.graphics_pipeline,
-            &swapchain_stuff.framebuffers,
-            render_pass,
-            swapchain_stuff.size,
-            vertex_buffer.vertex_buffer,
-            vertex_buffer.index_buffer,
-            vertex_buffer.index_count,
-            pipeline.pipeline_layout,
-            descriptor_sets.iter().map(|x| x.set).collect(),
-        );
 
         let pipeline_second = pipeline::create_graphics_pipeline(
             env.device().clone(), framebuffer.render_pass(), msaa_samples,
@@ -179,7 +169,17 @@ impl HelloApplication {
         // FIXME: framebuffer contains msaa. For quad need custom framebuffer without msaa.
         let quad_command_buffers = commands::create_quad_command_buffers(
             env.device(),
+            env.command_pool(),
+            quad_pipeline.graphics_pipeline,
+            &swapchain_stuff.framebuffers,
+            quad_render_pass,
+            swapchain_stuff.size,
+            quad_pipeline.pipeline_layout,
+            quad_descriptors.iter().map(|x| x.set).collect(),
+        );
 
+        let command_buffers = commands::create_quad_command_buffers(
+            env.device(),
             env.command_pool(),
             quad_pipeline.graphics_pipeline,
             &swapchain_stuff.framebuffers,
@@ -306,10 +306,15 @@ impl HelloApplication {
 
         let wait_semaphores = [self.sync.image_available_semaphores[self.current_frame]];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let signal_semaphores = [self.sync.render_finished_semaphores[self.current_frame]];
+        let first_pass_finished = [self.sync.render_finished_semaphores[self.current_frame]];
+        let second_pass_finished = [self.sync.render_quad_semaphore];
 
         let cmd_buf = frame_buffer::draw_to_framebuffer(&self.env, &self.framebuffer,
-                                                        |cmd| {});
+                                                        |cmd| {
+                                                            unsafe {
+                                                                self.env.device().cmd_execute_commands(cmd, &[self.second_buffer]);
+                                                            }
+                                                        });
 
         let submit_infos = [
             vk::SubmitInfo {
@@ -318,10 +323,21 @@ impl HelloApplication {
                 wait_semaphore_count: wait_semaphores.len() as u32,
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
-                command_buffer_count: 2,
-                p_command_buffers: [self.command_buffers[image_index as usize], cmd_buf].as_ptr(),
-                signal_semaphore_count: signal_semaphores.len() as u32,
-                p_signal_semaphores: signal_semaphores.as_ptr(),
+                command_buffer_count: 1,
+                p_command_buffers: [cmd_buf].as_ptr(),
+                signal_semaphore_count: first_pass_finished.len() as u32,
+                p_signal_semaphores: first_pass_finished.as_ptr(),
+            },
+            vk::SubmitInfo {
+                s_type: vk::StructureType::SUBMIT_INFO,
+                p_next: ptr::null(),
+                wait_semaphore_count: first_pass_finished.len() as u32,
+                p_wait_semaphores: first_pass_finished.as_ptr(),
+                p_wait_dst_stage_mask: wait_stages.as_ptr(),
+                command_buffer_count: 1,
+                p_command_buffers: [self.quad_command_buffers[image_index as usize]].as_ptr(),
+                signal_semaphore_count: second_pass_finished.len() as u32,
+                p_signal_semaphores: second_pass_finished.as_ptr(),
             }
         ];
 
@@ -345,7 +361,7 @@ impl HelloApplication {
             s_type: vk::StructureType::PRESENT_INFO_KHR,
             p_next: ptr::null(),
             wait_semaphore_count: 1,
-            p_wait_semaphores: signal_semaphores.as_ptr(),
+            p_wait_semaphores: second_pass_finished.as_ptr(),
             swapchain_count: 1,
             p_swapchains: swapchains.as_ptr(),
             p_image_indices: &image_index,
@@ -386,23 +402,57 @@ impl HelloApplication {
             wnd.inner_size(),
             self.msaa_samples,
         );
-        self.swapchain_stuff.create_framebuffers(self.env.device(), self.render_pass);
+        println!("{:?}", self.msaa_samples);
+        self.swapchain_stuff.create_framebuffers(self.env.device(), self.quad_render_pass);
 
         let dimensions = [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height];
         self.framebuffer.resize_swapchain(dimensions);
 
-        self.command_buffers = commands::create_command_buffers(
+        let mut quad_descriptors = Vec::new();
+        for img_view in self.swapchain_stuff.image_views.iter() {
+            quad_descriptors.push(
+                descriptors::DescriptorSetBuilder::new(
+                    self.env.device(), self.quad_pipeline.descriptor_set_layouts.get(0).unwrap())
+                    .add_image(self.framebuffer.attachments.get(0).unwrap().view, self.texture.texture_sampler)
+                    .build()
+            );
+        };
+        self.quad_descriptors = quad_descriptors;
+
+        self.command_buffers = commands::create_quad_command_buffers(
             &self.env.device(),
             self.env.command_pool(),
             self.pipeline.graphics_pipeline,
             &self.swapchain_stuff.framebuffers,
-            self.render_pass,
+            self.quad_render_pass,
+            self.swapchain_stuff.size,
+            self.pipeline.pipeline_layout,
+            self.quad_descriptors.iter().map(|x| x.set).collect(),
+        );
+
+        self.quad_command_buffers = commands::create_quad_command_buffers(
+            &self.env.device(),
+            self.env.command_pool(),
+            self.quad_pipeline.graphics_pipeline,
+            &self.swapchain_stuff.framebuffers,
+            self.quad_render_pass,
+            self.swapchain_stuff.size,
+            self.quad_pipeline.pipeline_layout,
+            self.quad_descriptors.iter().map(|x| x.set).collect(),
+        );
+
+
+        self.second_buffer = commands::create_second_command_buffers(
+            self.env.device(),
+            self.env.command_pool(),
+            self.pipeline_second.graphics_pipeline,
+            self.framebuffer.render_pass(),
             self.swapchain_stuff.size,
             self.vertex_buffer.vertex_buffer,
             self.vertex_buffer.index_buffer,
             self.vertex_buffer.index_count,
-            self.pipeline.pipeline_layout,
-            self.descriptor_sets.iter().map(|x| x.set).collect(),
+            self.pipeline_second.pipeline_layout,
+            self.descriptor_set_second.set,
         );
     }
 

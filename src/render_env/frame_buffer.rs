@@ -51,9 +51,9 @@ impl FrameBuffer {
 
         for (attachment_idx, attachment_info) in descriptions.iter().enumerate() {
             let final_layout = if format_has_depth(attachment_info.format) {
-                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                vk::ImageLayout::DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
             } else {
-                vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
             };
 
             attachments.push(vk::AttachmentDescription {
@@ -68,9 +68,14 @@ impl FrameBuffer {
                 final_layout,
             });
 
+
             let attachment_ref = vk::AttachmentReference {
                 attachment: attachment_idx as u32,
-                layout: final_layout,
+                layout: if format_has_depth(attachment_info.format) {
+                    vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                } else {
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
+                },
             };
 
             if format_has_depth(attachment_info.format) {
@@ -97,7 +102,7 @@ impl FrameBuffer {
 
         let subpass_deps = vec!(
             vk::SubpassDependency {
-                src_subpass: 0,
+                src_subpass: vk::SUBPASS_EXTERNAL,
                 dst_subpass: 0,
                 src_stage_mask: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -107,7 +112,7 @@ impl FrameBuffer {
             },
             vk::SubpassDependency {
                 src_subpass: 0,
-                dst_subpass: 0,
+                dst_subpass: vk::SUBPASS_EXTERNAL,
                 src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                 dst_stage_mask: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 src_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
@@ -234,7 +239,7 @@ pub fn draw_to_framebuffer<F>(env: &RenderEnv, fb: &FrameBuffer, f: F) -> vk::Co
         s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
         p_next: ptr::null(),
         p_inheritance_info: ptr::null(),
-        flags: vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
+        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
     };
 
     unsafe {
@@ -298,7 +303,7 @@ pub fn draw_to_framebuffer<F>(env: &RenderEnv, fb: &FrameBuffer, f: F) -> vk::Co
         env.device().cmd_begin_render_pass(
             command_buffer,
             &render_pass_begin_info,
-            vk::SubpassContents::INLINE,
+            vk::SubpassContents::SECONDARY_COMMAND_BUFFERS,
         );
 
         f(command_buffer);

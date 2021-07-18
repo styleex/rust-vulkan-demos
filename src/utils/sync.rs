@@ -10,6 +10,7 @@ pub struct SyncObjects {
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub render_finished_semaphores: Vec<vk::Semaphore>,
     pub inflight_fences: Vec<vk::Fence>,
+    pub render_quad_semaphore: vk::Semaphore,
 }
 
 
@@ -18,6 +19,7 @@ pub fn create_sync_objects(device: &ash::Device) -> SyncObjects {
         image_available_semaphores: vec![],
         render_finished_semaphores: vec![],
         inflight_fences: vec![],
+        render_quad_semaphore: vk::Semaphore::null(),
     };
 
     let semaphore_create_info = vk::SemaphoreCreateInfo {
@@ -31,6 +33,7 @@ pub fn create_sync_objects(device: &ash::Device) -> SyncObjects {
         p_next: ptr::null(),
         flags: vk::FenceCreateFlags::SIGNALED,
     };
+
 
     for _ in 0..MAX_FRAMES_IN_FLIGHT {
         unsafe {
@@ -53,6 +56,12 @@ pub fn create_sync_objects(device: &ash::Device) -> SyncObjects {
             sync_objects.inflight_fences.push(inflight_fence);
         }
     }
+
+    unsafe {
+        sync_objects.render_quad_semaphore = device
+            .create_semaphore(&semaphore_create_info, None)
+            .expect("Failed to create Semaphore Object!");
+    };
 
     sync_objects
 }

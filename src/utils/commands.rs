@@ -321,7 +321,7 @@ pub fn create_second_command_buffers(
         s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
         p_next: ptr::null(),
         p_inheritance_info: &inheritance_info,
-        flags: vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE,
+        flags: vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE | vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
     };
 
     unsafe {

@@ -110,7 +110,7 @@ pub fn create_quad_render_pass(
         stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
         stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
         initial_layout: vk::ImageLayout::UNDEFINED,
-        final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
     };
 
     let color_attachment_ref = vk::AttachmentReference {
@@ -133,15 +133,26 @@ pub fn create_quad_render_pass(
 
     let render_pass_attachments = [color_attachment];
 
-    let subpass_dependencies = [vk::SubpassDependency {
-        src_subpass: vk::SUBPASS_EXTERNAL,
-        dst_subpass: 0,
-        src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-        dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-        src_access_mask: vk::AccessFlags::empty(),
-        dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-        dependency_flags: vk::DependencyFlags::empty(),
-    }];
+    let subpass_dependencies = [
+        vk::SubpassDependency {
+            src_subpass: vk::SUBPASS_EXTERNAL,
+            dst_subpass: 0,
+            src_stage_mask: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            src_access_mask: vk::AccessFlags::MEMORY_READ,
+            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            dependency_flags: vk::DependencyFlags::BY_REGION,
+        },
+        vk::SubpassDependency {
+            src_subpass: 0,
+            dst_subpass: vk::SUBPASS_EXTERNAL,
+            src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            dst_stage_mask: vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+            src_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            dst_access_mask: vk::AccessFlags::MEMORY_READ,
+            dependency_flags: vk::DependencyFlags::BY_REGION,
+        }
+    ];
 
     let renderpass_create_info = vk::RenderPassCreateInfo {
         s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,

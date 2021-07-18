@@ -146,8 +146,8 @@ impl SwapChain {
 
         for &image_view in self.image_views.iter() {
             let attachments = [
-                self.msaa_buffer.view,
-                self.depth_buffer.view,
+                // self.msaa_buffer.view,
+                // self.depth_buffer.view,
                 image_view,
             ];
 
