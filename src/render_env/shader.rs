@@ -1,14 +1,19 @@
 use std::collections::HashMap;
-use std::ffi::CString;
+use std::ffi::{CString, c_void};
 use std::fs::File;
 use std::io::Read;
-use std::ptr;
+use std::{ptr, ffi};
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use ash::vk::{DescriptorSetLayoutBinding};
+use ash::vk::DescriptorSetLayoutBinding;
 use spirv_reflect::ShaderModule;
 use spirv_reflect::types::{ReflectDescriptorType, ReflectShaderStageFlags};
+use core::mem;
+
+pub trait SpecializationConstants {
+    fn entry_map() -> Vec<vk::SpecializationMapEntry>;
+}
 
 pub struct Shader {
     device: ash::Device,
@@ -78,6 +83,7 @@ impl Shader {
         let module = ShaderModule::load_u8_data(&code).unwrap();
         let reflected_descriptor_sets = module.enumerate_descriptor_sets(None).unwrap();
         let shader_stage_flags = get_shader_stage_flags(module.get_shader_stage());
+        let e = module.enumerate_input_variables(Some("main"));
 
         let mut sets = HashMap::<u32, HashMap<u32, DescriptorSetLayoutBinding>>::new();
         for ref_set in reflected_descriptor_sets.iter() {
@@ -128,9 +134,16 @@ impl Shader {
         }
     }
 
-    pub fn destroy(&self) {
-        unsafe {
-            self.device.destroy_shader_module(self.shader_module, None);
+    pub fn stage_with_constants(&self, spec_info: &vk::SpecializationInfo) -> vk::PipelineShaderStageCreateInfo
+    {
+        vk::PipelineShaderStageCreateInfo {
+            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineShaderStageCreateFlags::empty(),
+            module: self.shader_module,
+            p_name: self.entry_point_name.as_ptr(),
+            p_specialization_info: spec_info,
+            stage: self.stage_flags,
         }
     }
 
@@ -143,6 +156,14 @@ impl Shader {
             p_name: self.entry_point_name.as_ptr(),
             p_specialization_info: ptr::null(),
             stage: self.stage_flags,
+        }
+    }
+}
+
+impl Drop for Shader {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_shader_module(self.shader_module, None);
         }
     }
 }
@@ -186,7 +207,7 @@ fn _merge_layout_bindings(shaders: Vec<&Shader>) -> Vec<Vec<DescriptorSetLayoutB
 
 pub struct DescriptorSetLayout {
     pub layout: vk::DescriptorSetLayout,
-    pub(super)binding_desc: Vec<vk::DescriptorSetLayoutBinding>,
+    pub(super) binding_desc: Vec<vk::DescriptorSetLayoutBinding>,
 }
 
 // Merge descriptor information from shaders into general list of descriptor set layout

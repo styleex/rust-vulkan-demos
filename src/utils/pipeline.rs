@@ -1,9 +1,13 @@
-use std::ptr;
+use std::{mem, ptr};
+use std::ffi::c_void;
+use std::mem::size_of;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
+use ash::vk::SpecializationMapEntry;
 
 use crate::render_env::shader;
+use crate::render_env::shader::SpecializationConstants;
 use crate::utils::vertex;
 
 pub struct Pipeline {
@@ -213,9 +217,6 @@ pub fn create_graphics_pipeline(
             .expect("Failed to create Graphics Pipeline!.")
     };
 
-    vert_shader_module.destroy();
-    frag_shader_module.destroy();
-
     Pipeline {
         device,
         graphics_pipeline: graphics_pipelines[0],
@@ -223,6 +224,25 @@ pub fn create_graphics_pipeline(
         descriptor_set_layouts,
     }
 }
+
+
+#[repr(C)]
+pub struct Constants {
+    num_samples: u32,
+}
+
+impl SpecializationConstants for Constants {
+    fn entry_map() -> Vec<SpecializationMapEntry> {
+        vec![
+            SpecializationMapEntry {
+                constant_id: 0,
+                offset: memoffset::offset_of!(Constants, num_samples) as u32,
+                size: size_of::<u32>(),
+            }
+        ]
+    }
+}
+
 
 pub fn create_quad_graphics_pipeline(
     device: ash::Device,
@@ -233,9 +253,23 @@ pub fn create_quad_graphics_pipeline(
     let vert_shader_module = shader::Shader::load(&device, "shaders/spv/compose.vert.spv");
     let frag_shader_module = shader::Shader::load(&device, "shaders/spv/compose.frag.spv");
 
+    let consts = Constants {
+        num_samples: samples.as_raw() as u32,
+    };
+
+    let entries = Constants::entry_map();
+    println!("{:?}", entries);
+
+    let spec_info = vk::SpecializationInfo {
+        map_entry_count: entries.len() as u32,
+        p_map_entries: entries.as_ptr(),
+        data_size: mem::size_of::<Constants>(),
+        p_data: &consts as *const Constants as *const c_void,
+    };
+
     let shader_stages = [
         vert_shader_module.stage(),
-        frag_shader_module.stage(),
+        frag_shader_module.stage_with_constants(&spec_info),
     ];
 
     let descriptor_set_layouts = shader::create_descriptor_set_layout(&device, vec![
@@ -406,9 +440,9 @@ pub fn create_quad_graphics_pipeline(
             )
             .expect("Failed to create Graphics Pipeline!.")
     };
+    println!("{:?}", &consts.num_samples);
+    println!("{:?}", entries[0]);
 
-    vert_shader_module.destroy();
-    frag_shader_module.destroy();
 
     Pipeline {
         device,

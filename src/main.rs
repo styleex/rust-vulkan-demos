@@ -40,14 +40,15 @@ struct HelloApplication {
 
     framebuffer: frame_buffer::FrameBuffer,
 
-    second_command_buffer: vk::CommandBuffer,
+    draw_mesh_second_cmd: vk::CommandBuffer,
+    draw_mesh_primary: [vk::CommandBuffer; MAX_FRAMES_IN_FLIGHT],
     pipeline_second: pipeline::Pipeline,
     descriptor_set_second: descriptors::DescriptorSet,
 
     quad_pipeline: pipeline::Pipeline,
     quad_render_pass: vk::RenderPass,
     quad_descriptors: Vec<descriptors::DescriptorSet>,
-    quad_command_buffers: Vec<vk::CommandBuffer>,
+    draw_quad_primary_cmds: Vec<vk::CommandBuffer>,  // Per frame command buffers
 }
 
 impl HelloApplication {
@@ -80,7 +81,7 @@ impl HelloApplication {
             env.command_pool(),
             env.queue(),
             &mem_properties,
-            Path::new("assets/chalet.jpg"),
+            Path::new("assets/texture.jpg"),
         );
 
         let dimensions = [swapchain_stuff.size.width, swapchain_stuff.size.height];
@@ -122,9 +123,8 @@ impl HelloApplication {
             env.device().clone(), quad_render_pass, vk::SampleCountFlags::TYPE_1,
         );
 
-
         let mut quad_descriptors = Vec::new();
-        for img_view in swapchain_stuff.image_views.iter() {
+        for _ in swapchain_stuff.image_views.iter() {
             quad_descriptors.push(
                 descriptors::DescriptorSetBuilder::new(
                     env.device(), quad_pipeline.descriptor_set_layouts.get(0).unwrap())
@@ -165,7 +165,8 @@ impl HelloApplication {
             camera,
 
             framebuffer,
-            second_command_buffer: second_buffer,
+            draw_mesh_second_cmd: second_buffer,
+            draw_mesh_primary: [vk::CommandBuffer::null(), vk::CommandBuffer::null()],
             pipeline_second,
             descriptor_set_second,
 
@@ -173,7 +174,7 @@ impl HelloApplication {
             quad_pipeline,
             quad_descriptors,
 
-            quad_command_buffers,
+            draw_quad_primary_cmds: quad_command_buffers,
         }
     }
 
@@ -263,9 +264,16 @@ impl HelloApplication {
             &self.env, &self.framebuffer,
             |cmd| {
                 unsafe {
-                    self.env.device().cmd_execute_commands(cmd, &[self.second_command_buffer]);
+                    self.env.device().cmd_execute_commands(cmd, &[self.draw_mesh_second_cmd]);
                 }
             });
+
+        unsafe {
+            if self.draw_mesh_primary[self.current_frame] != vk::CommandBuffer::null() {
+                self.env.device().free_command_buffers(self.env.command_pool(), &[self.draw_mesh_primary[self.current_frame]]);
+            }
+        }
+        self.draw_mesh_primary[self.current_frame] = cmd_buf;
 
         let submit_infos = [
             vk::SubmitInfo {
@@ -275,7 +283,7 @@ impl HelloApplication {
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [cmd_buf].as_ptr(),
+                p_command_buffers: [self.draw_mesh_primary[self.current_frame]].as_ptr(),
                 signal_semaphore_count: first_pass_finished.len() as u32,
                 p_signal_semaphores: first_pass_finished.as_ptr(),
             },
@@ -286,7 +294,7 @@ impl HelloApplication {
                 p_wait_semaphores: first_pass_finished.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [self.quad_command_buffers[image_index as usize]].as_ptr(),
+                p_command_buffers: [self.draw_quad_primary_cmds[image_index as usize]].as_ptr(),
                 signal_semaphore_count: second_pass_finished.len() as u32,
                 p_signal_semaphores: second_pass_finished.as_ptr(),
             }
@@ -305,7 +313,6 @@ impl HelloApplication {
                 )
                 .expect("Failed to execute queue submit.");
         }
-
         let swapchains = [self.swapchain_stuff.swapchain];
 
         let present_info = vk::PresentInfoKHR {
@@ -367,7 +374,7 @@ impl HelloApplication {
         };
         self.quad_descriptors = quad_descriptors;
 
-        self.quad_command_buffers = commands::create_quad_command_buffers(
+        self.draw_quad_primary_cmds = commands::create_quad_command_buffers(
             &self.env.device(),
             self.env.command_pool(),
             self.quad_pipeline.graphics_pipeline,
@@ -379,7 +386,7 @@ impl HelloApplication {
         );
 
 
-        self.second_command_buffer = commands::create_second_command_buffers(
+        self.draw_mesh_second_cmd = commands::create_second_command_buffers(
             self.env.device(),
             self.env.command_pool(),
             self.pipeline_second.graphics_pipeline,
