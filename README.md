@@ -11,7 +11,7 @@ Plan:
     
     * (OK) FPS camera for world view 
     
-    * Framebuffer + attachment image for simplifying offscreen buffer creation.
+    * (OK) Framebuffer + attachment image for simplifying offscreen buffer creation.
 
 * Imgui integration 
   
