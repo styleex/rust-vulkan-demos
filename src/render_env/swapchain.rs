@@ -17,14 +17,11 @@ pub struct SwapChain {
     pub framebuffers: Vec<vk::Framebuffer>,
     pub format: vk::Format,
     pub size: vk::Extent2D,
-
-    pub depth_buffer: attachment_texture::AttachmentImage,
-    pub msaa_buffer: attachment_texture::AttachmentImage,
 }
 
 impl SwapChain {
     pub fn new(
-        env: &RenderEnv, size: PhysicalSize<u32>, msaa_samples: vk::SampleCountFlags,
+        env: &RenderEnv, size: PhysicalSize<u32>,
     ) -> SwapChain
     {
         let swapchain_support = utils::SwapChainSupportDetail::load(&env);
@@ -90,25 +87,6 @@ impl SwapChain {
             image_views.push(image_view);
         }
 
-
-        let depth_buffer = attachment_texture::AttachmentImage::new(
-            env,
-            [extent.width, extent.height],
-            vk::Format::D32_SFLOAT,
-            1,
-            msaa_samples,
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-        );
-
-        let msaa_buffer = attachment_texture::AttachmentImage::new(
-            env,
-            [extent.width, extent.height],
-            swapchain_format.format,
-            1,
-            msaa_samples,
-            vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
-        );
-
         SwapChain {
             device: env.device().clone(),
             swapchain_api,
@@ -118,9 +96,6 @@ impl SwapChain {
             images: swapchain_images,
             image_views,
             framebuffers: vec![],
-
-            depth_buffer,
-            msaa_buffer,
         }
     }
 
@@ -129,9 +104,6 @@ impl SwapChain {
             for &framebuffer in self.framebuffers.iter() {
                 self.device.destroy_framebuffer(framebuffer, None);
             }
-
-            self.msaa_buffer.destroy();
-            self.depth_buffer.destroy();
 
             for &img_view in &self.image_views {
                 self.device.destroy_image_view(img_view, None);
@@ -146,8 +118,6 @@ impl SwapChain {
 
         for &image_view in self.image_views.iter() {
             let attachments = [
-                // self.msaa_buffer.view,
-                // self.depth_buffer.view,
                 image_view,
             ];
 

@@ -12,7 +12,7 @@ pub struct DescriptorSet {
 }
 
 impl DescriptorSet {
-    pub fn destroy(&self) {
+    pub fn destroy(&mut self) {
         unsafe {
             self.device.destroy_descriptor_pool(self.pool, None);
         }

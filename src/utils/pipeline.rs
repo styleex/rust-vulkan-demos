@@ -17,10 +17,12 @@ impl Pipeline {
     pub fn destroy(&self) {
         unsafe {
             self.device.destroy_pipeline(self.graphics_pipeline, None);
-            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+
             for descriptor_set_layout in self.descriptor_set_layouts.iter() {
                 self.device.destroy_descriptor_set_layout(descriptor_set_layout.layout, None);
             }
+
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
         }
     }
 }
@@ -48,6 +50,7 @@ pub fn create_graphics_pipeline(
         .iter()
         .map(|x| x.layout)
         .collect();
+
     let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
         s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
         p_next: ptr::null(),
