@@ -1,5 +1,5 @@
+use std::time;
 use std::path::Path;
-use std::{time};
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -17,16 +17,18 @@ pub struct Vertex {
 }
 
 impl Vertex {
-    pub fn get_binding_descriptions() -> [vk::VertexInputBindingDescription; 1] {
-        [vk::VertexInputBindingDescription {
-            binding: 0,
-            stride: std::mem::size_of::<Self>() as u32,
-            input_rate: vk::VertexInputRate::VERTEX,
-        }]
+    pub fn get_binding_descriptions() -> Vec<vk::VertexInputBindingDescription> {
+        vec![
+            vk::VertexInputBindingDescription {
+                binding: 0,
+                stride: std::mem::size_of::<Self>() as u32,
+                input_rate: vk::VertexInputRate::VERTEX,
+            }
+        ]
     }
 
-    pub fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
-        [
+    pub fn get_attribute_descriptions() -> Vec<vk::VertexInputAttributeDescription> {
+        vec![
             vk::VertexInputAttributeDescription {
                 location: 0,
                 binding: 0,
@@ -217,7 +219,7 @@ impl VertexBuffer {
             vk::BufferUsageFlags::INDEX_BUFFER,
             indices);
 
-     println!("Model uploaded: {}", t1.elapsed().as_secs_f32());
+        println!("Model uploaded: {}", t1.elapsed().as_secs_f32());
 
         VertexBuffer {
             device,

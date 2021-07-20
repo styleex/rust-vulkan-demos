@@ -4,7 +4,7 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use winit::dpi::PhysicalSize;
 
-use crate::render_env::{attachment_texture, utils};
+use crate::render_env::{utils};
 use crate::render_env::env::RenderEnv;
 
 pub struct SwapChain {

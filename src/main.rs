@@ -11,7 +11,7 @@ use winit::platform::run_return::EventLoopExtRunReturn;
 use utils::{commands, pipeline, render_pass,
             sync, uniform_buffer, vertex};
 
-use crate::render_env::{descriptors, env, frame_buffer};
+use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder};
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
 
@@ -42,10 +42,10 @@ struct HelloApplication {
 
     draw_mesh_second_cmd: vk::CommandBuffer,
     draw_mesh_primary: [vk::CommandBuffer; MAX_FRAMES_IN_FLIGHT],
-    pipeline_second: pipeline::Pipeline,
+    pipeline_second: pipeline_builder::Pipeline,
     descriptor_set_second: descriptors::DescriptorSet,
 
-    quad_pipeline: pipeline::Pipeline,
+    quad_pipeline: pipeline_builder::Pipeline,
     quad_render_pass: vk::RenderPass,
     quad_descriptors: Vec<descriptors::DescriptorSet>,
     draw_quad_primary_cmds: Vec<vk::CommandBuffer>,  // Per frame command buffers
@@ -81,7 +81,7 @@ impl HelloApplication {
             env.command_pool(),
             env.queue(),
             &mem_properties,
-            Path::new("assets/texture.jpg"),
+            Path::new("assets/chalet.jpg"),
         );
 
         let dimensions = [swapchain_stuff.size.width, swapchain_stuff.size.height];
@@ -120,7 +120,7 @@ impl HelloApplication {
         );
 
         let quad_pipeline = pipeline::create_quad_graphics_pipeline(
-            env.device().clone(), quad_render_pass, vk::SampleCountFlags::TYPE_1,
+            env.device().clone(), quad_render_pass, msaa_samples,
         );
 
         let mut quad_descriptors = Vec::new();

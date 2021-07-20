@@ -14,3 +14,4 @@ pub mod shader;
 pub mod descriptors;
 mod platforms;
 pub mod frame_buffer;
+pub mod pipeline_builder;

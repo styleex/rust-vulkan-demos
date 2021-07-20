@@ -279,27 +279,6 @@ pub fn draw_to_framebuffer<F>(env: &RenderEnv, fb: &FrameBuffer, f: F) -> vk::Co
     };
 
     unsafe {
-        let viewports = [vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: fb.dimensions[0] as f32,
-            height: fb.dimensions[1] as f32,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
-
-        let scissors = [vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: vk::Extent2D {
-                width: fb.dimensions[0],
-                height: fb.dimensions[1],
-            },
-        }];
-
-
-        env.device().cmd_set_viewport(command_buffer, 0, viewports.as_ref());
-        env.device().cmd_set_scissor(command_buffer, 0, scissors.as_ref());
-
         env.device().cmd_begin_render_pass(
             command_buffer,
             &render_pass_begin_info,

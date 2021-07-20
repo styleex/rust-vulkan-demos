@@ -1,30 +1,20 @@
+use core::mem;
+use std::{ffi, ptr};
 use std::collections::HashMap;
-use std::ffi::{CString, c_void};
+use std::ffi::{CString};
 use std::fs::File;
 use std::io::Read;
-use std::{ptr, ffi};
 
 use ash::version::DeviceV1_0;
 use ash::vk;
 use ash::vk::DescriptorSetLayoutBinding;
 use spirv_reflect::ShaderModule;
 use spirv_reflect::types::{ReflectDescriptorType, ReflectShaderStageFlags};
-use core::mem;
 
 pub trait SpecializationConstants {
     fn entry_map() -> Vec<vk::SpecializationMapEntry>;
 }
 
-pub struct Shader {
-    device: ash::Device,
-    shader_module: vk::ShaderModule,
-
-    // descriptor_sets[set][binding] = DescriptorSetLayoutBinding
-    descriptor_sets: HashMap<u32, HashMap<u32, DescriptorSetLayoutBinding>>,
-    entry_point_name: CString,
-
-    stage_flags: vk::ShaderStageFlags,
-}
 
 fn get_shader_stage_flags(flags: ReflectShaderStageFlags) -> vk::ShaderStageFlags {
     let mapping = [
@@ -71,6 +61,56 @@ fn get_descriptor_type(reflected_type: ReflectDescriptorType) -> Option<vk::Desc
     None
 }
 
+pub struct ConstantsBuilder {
+    cur_constant: u32,
+    cur_offset: u32,
+    data: Vec<u8>,
+    entry_map: Vec<vk::SpecializationMapEntry>,
+}
+
+impl ConstantsBuilder {
+    pub fn new() -> ConstantsBuilder {
+        ConstantsBuilder {
+            cur_constant: 0,
+            cur_offset: 0,
+            data: vec![],
+            entry_map: vec![],
+        }
+    }
+
+    pub fn add_u32(mut self, val: u32) -> Self {
+        let size = mem::size_of_val(&val);
+
+        self.entry_map.push(
+            vk::SpecializationMapEntry {
+                constant_id: self.cur_constant,
+                offset: self.cur_offset,
+                size,
+            }
+        );
+
+        self.cur_constant += 1;
+        self.cur_offset += size as u32;
+        self.data.extend(val.to_le_bytes());
+
+        self
+    }
+}
+
+pub struct Shader {
+    device: ash::Device,
+    shader_module: vk::ShaderModule,
+
+    // descriptor_sets[set][binding] = DescriptorSetLayoutBinding
+    descriptor_sets: HashMap<u32, HashMap<u32, DescriptorSetLayoutBinding>>,
+    entry_point_name: CString,
+
+    stage_flags: vk::ShaderStageFlags,
+
+    constants: Option<ConstantsBuilder>,
+    spec_info: Option<vk::SpecializationInfo>,
+}
+
 impl Shader {
     pub fn load(device: &ash::Device, path: &str) -> Shader {
         let spv_file = File::open(path)
@@ -83,7 +123,6 @@ impl Shader {
         let module = ShaderModule::load_u8_data(&code).unwrap();
         let reflected_descriptor_sets = module.enumerate_descriptor_sets(None).unwrap();
         let shader_stage_flags = get_shader_stage_flags(module.get_shader_stage());
-        let e = module.enumerate_input_variables(Some("main"));
 
         let mut sets = HashMap::<u32, HashMap<u32, DescriptorSetLayoutBinding>>::new();
         for ref_set in reflected_descriptor_sets.iter() {
@@ -131,30 +170,47 @@ impl Shader {
             entry_point_name: CString::new(module.get_entry_point_name()).unwrap(),
             stage_flags: shader_stage_flags,
             device: device.clone(),
+            constants: None,
+            spec_info: None,
         }
     }
 
-    pub fn stage_with_constants(&self, spec_info: &vk::SpecializationInfo) -> vk::PipelineShaderStageCreateInfo
-    {
-        vk::PipelineShaderStageCreateInfo {
-            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::PipelineShaderStageCreateFlags::empty(),
-            module: self.shader_module,
-            p_name: self.entry_point_name.as_ptr(),
-            p_specialization_info: spec_info,
-            stage: self.stage_flags,
-        }
+    pub fn specialize(mut self, constants: ConstantsBuilder) -> Shader{
+        self.constants = Some(constants);
+
+        let const_ref = self.constants.as_ref().unwrap();
+        self.spec_info = Some(
+            vk::SpecializationInfo {
+                map_entry_count: const_ref.entry_map.len() as u32,
+                p_map_entries: const_ref.entry_map.as_ptr(),
+                data_size: const_ref.data.len(),
+                p_data: const_ref.data.as_ptr() as *const _ as *const ffi::c_void,
+            }
+        );
+
+        self
     }
 
     pub fn stage(&self) -> vk::PipelineShaderStageCreateInfo {
+        if self.constants.is_none() {
+            return vk::PipelineShaderStageCreateInfo {
+                s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+                p_next: ptr::null(),
+                flags: vk::PipelineShaderStageCreateFlags::empty(),
+                module: self.shader_module,
+                p_name: self.entry_point_name.as_ptr(),
+                p_specialization_info: ptr::null(),
+                stage: self.stage_flags,
+            };
+        };
+
         vk::PipelineShaderStageCreateInfo {
             s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::PipelineShaderStageCreateFlags::empty(),
             module: self.shader_module,
             p_name: self.entry_point_name.as_ptr(),
-            p_specialization_info: ptr::null(),
+            p_specialization_info: self.spec_info.as_ref().unwrap(),
             stage: self.stage_flags,
         }
     }
