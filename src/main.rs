@@ -14,6 +14,7 @@ use utils::{commands, pipeline, render_pass,
 use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder};
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
+use crate::render_env::egui::EguiRenderer;
 
 mod utils;
 mod camera;
@@ -22,6 +23,9 @@ mod render_env;
 
 
 struct HelloApplication {
+    egui_render: EguiRenderer,
+    egui_ctx: egui::CtxRef,
+
     env: Arc<env::RenderEnv>,
 
     swapchain_stuff: render_env::swapchain::SwapChain,
@@ -49,8 +53,6 @@ struct HelloApplication {
     quad_render_pass: vk::RenderPass,
     quad_descriptors: Vec<descriptors::DescriptorSet>,
     draw_quad_primary_cmds: Vec<vk::CommandBuffer>,  // Per frame command buffers
-
-    egui_ctx: egui::CtxRef,
 }
 
 impl HelloApplication {
@@ -149,6 +151,14 @@ impl HelloApplication {
 
         let sync = sync::create_sync_objects(env.device());
 
+        let mut egui_ctx = egui::Context::new();
+        let mut init_input = egui::RawInput::default();
+        init_input.pixels_per_point = Some(wnd.scale_factor() as f32);
+
+        egui_ctx.begin_frame(init_input);
+        egui_ctx.end_frame();
+
+        let egui_renderer = EguiRenderer::new(&env, egui_ctx.clone());
         HelloApplication {
             env,
 
@@ -176,7 +186,8 @@ impl HelloApplication {
             quad_descriptors,
 
             draw_quad_primary_cmds: quad_command_buffers,
-            egui_ctx: egui::Context::new(),
+            egui_ctx,
+            egui_render: egui_renderer,
         }
     }
 

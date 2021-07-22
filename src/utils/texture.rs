@@ -39,14 +39,14 @@ impl Texture {
 
         let (image_width, image_height) = (image_object.width(), image_object.height());
 
-        Texture::from_pixels(device, command_pool, submit_queue, device_memory_properties, image_data, image_width, image_height)
+        Texture::from_pixels(device, command_pool, submit_queue, device_memory_properties, &image_data, image_width, image_height)
     }
 
     pub fn from_pixels(device: ash::Device,
                        command_pool: vk::CommandPool,
                        submit_queue: vk::Queue,
                        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-                       pixel_data: Vec<u8>, width: u32, height: u32) -> Texture
+                       pixel_data: &Vec<u8>, width: u32, height: u32) -> Texture
     {
         let (texture_image, texture_image_memory, mip_levels) = create_texture_image(
             &device, command_pool, submit_queue, device_memory_properties, pixel_data, width, height);
@@ -82,7 +82,7 @@ fn create_texture_image(
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-    image_data: Vec<u8>, image_width: u32, image_height: u32,
+    image_data: &Vec<u8>, image_width: u32, image_height: u32,
 ) -> (vk::Image, vk::DeviceMemory, u32)
 {
     let image_size = (std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;
