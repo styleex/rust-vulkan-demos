@@ -1,13 +1,13 @@
 use std::cmp::max;
 use std::path::Path;
 use std::ptr;
+use std::time::Instant;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use image::GenericImageView;
 
 use crate::utils::buffer_utils;
-use std::time::Instant;
 
 pub struct Texture {
     device: ash::Device,
@@ -27,8 +27,29 @@ impl Texture {
         device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
         image_path: &Path,
     ) -> Texture {
+        let mut image_object = image::open(image_path).unwrap();
+        image_object = image_object.flipv();
+
+        let image_data = match &image_object {
+            image::DynamicImage::ImageLumaA8(_)
+            | image::DynamicImage::ImageBgra8(_)
+            | image::DynamicImage::ImageRgba8(_) => image_object.to_rgba8().into_raw(),
+            _ => image_object.to_rgba8().into_raw(),
+        };
+
+        let (image_width, image_height) = (image_object.width(), image_object.height());
+
+        Texture::from_pixels(device, command_pool, submit_queue, device_memory_properties, image_data, image_width, image_height)
+    }
+
+    pub fn from_pixels(device: ash::Device,
+                       command_pool: vk::CommandPool,
+                       submit_queue: vk::Queue,
+                       device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
+                       pixel_data: Vec<u8>, width: u32, height: u32) -> Texture
+    {
         let (texture_image, texture_image_memory, mip_levels) = create_texture_image(
-            &device, command_pool, submit_queue, device_memory_properties, image_path);
+            &device, command_pool, submit_queue, device_memory_properties, pixel_data, width, height);
 
         let texture_image_view = create_image_view(
             &device, texture_image, vk::Format::R8G8B8A8_SRGB,
@@ -61,22 +82,9 @@ fn create_texture_image(
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-    image_path: &Path,
+    image_data: Vec<u8>, image_width: u32, image_height: u32,
 ) -> (vk::Image, vk::DeviceMemory, u32)
 {
-    let t1 = Instant::now();
-    let mut image_object = image::open(image_path).unwrap();
-    image_object = image_object.flipv();
-
-    let image_data = match &image_object {
-        image::DynamicImage::ImageLumaA8(_)
-        | image::DynamicImage::ImageBgra8(_)
-        | image::DynamicImage::ImageRgba8(_) => image_object.to_rgba8().into_raw(),
-        _ => image_object.to_rgba8().into_raw(),
-    };
-    println!("Elapsed: {}", t1.elapsed().as_millis());
-
-    let (image_width, image_height) = (image_object.width(), image_object.height());
     let image_size = (std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;
 
     let mip_levels = ((::std::cmp::max(image_width, image_height) as f32)

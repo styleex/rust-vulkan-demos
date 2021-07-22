@@ -41,7 +41,7 @@ struct HelloApplication {
     framebuffer: frame_buffer::FrameBuffer,
 
     draw_mesh_second_cmd: vk::CommandBuffer,
-    draw_mesh_primary: [vk::CommandBuffer; MAX_FRAMES_IN_FLIGHT],
+    geometry_pass_cmds: [vk::CommandBuffer; MAX_FRAMES_IN_FLIGHT],
     pipeline_second: pipeline_builder::Pipeline,
     descriptor_set_second: descriptors::DescriptorSet,
 
@@ -49,6 +49,8 @@ struct HelloApplication {
     quad_render_pass: vk::RenderPass,
     quad_descriptors: Vec<descriptors::DescriptorSet>,
     draw_quad_primary_cmds: Vec<vk::CommandBuffer>,  // Per frame command buffers
+
+    egui_ctx: egui::CtxRef,
 }
 
 impl HelloApplication {
@@ -58,7 +60,6 @@ impl HelloApplication {
         let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
 
         let mut swapchain_stuff = render_env::swapchain::SwapChain::new(&env, wnd.inner_size());
-
 
         let quad_render_pass = render_pass::create_quad_render_pass(env.device(), swapchain_stuff.format);
         swapchain_stuff.create_framebuffers(env.device(), quad_render_pass);
@@ -166,7 +167,7 @@ impl HelloApplication {
 
             framebuffer,
             draw_mesh_second_cmd: second_buffer,
-            draw_mesh_primary: [vk::CommandBuffer::null(), vk::CommandBuffer::null()],
+            geometry_pass_cmds: [vk::CommandBuffer::null(), vk::CommandBuffer::null()],
             pipeline_second,
             descriptor_set_second,
 
@@ -175,6 +176,7 @@ impl HelloApplication {
             quad_descriptors,
 
             draw_quad_primary_cmds: quad_command_buffers,
+            egui_ctx: egui::Context::new(),
         }
     }
 
@@ -260,7 +262,7 @@ impl HelloApplication {
         let first_pass_finished = [self.sync.render_finished_semaphores[self.current_frame]];
         let second_pass_finished = [self.sync.render_quad_semaphore];
 
-        let cmd_buf = frame_buffer::draw_to_framebuffer(
+        let geometry_pass_cmd = frame_buffer::draw_to_framebuffer(
             &self.env, &self.framebuffer,
             |cmd| {
                 unsafe {
@@ -269,11 +271,20 @@ impl HelloApplication {
             });
 
         unsafe {
-            if self.draw_mesh_primary[self.current_frame] != vk::CommandBuffer::null() {
-                self.env.device().free_command_buffers(self.env.command_pool(), &[self.draw_mesh_primary[self.current_frame]]);
+            if self.geometry_pass_cmds[self.current_frame] != vk::CommandBuffer::null() {
+                self.env.device().free_command_buffers(self.env.command_pool(), &[self.geometry_pass_cmds[self.current_frame]]);
             }
         }
-        self.draw_mesh_primary[self.current_frame] = cmd_buf;
+        self.geometry_pass_cmds[self.current_frame] = geometry_pass_cmd;
+
+        let raw_input = egui::RawInput::default();
+        self.egui_ctx.begin_frame(raw_input);
+        egui::CentralPanel::default().show(&self.egui_ctx, |ui| {
+            ui.heading("Test")
+        });
+
+        let (output, shapes) = self.egui_ctx.end_frame();
+        let clipped_meshes = self.egui_ctx.tessellate(shapes);
 
         let submit_infos = [
             vk::SubmitInfo {
@@ -283,7 +294,7 @@ impl HelloApplication {
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [self.draw_mesh_primary[self.current_frame]].as_ptr(),
+                p_command_buffers: [self.geometry_pass_cmds[self.current_frame]].as_ptr(),
                 signal_semaphore_count: first_pass_finished.len() as u32,
                 p_signal_semaphores: first_pass_finished.as_ptr(),
             },

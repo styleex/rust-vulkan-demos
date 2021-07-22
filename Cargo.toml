@@ -15,6 +15,8 @@ cgmath = "0.18.0"
 image = "0.23"
 tobj = "3.0"
 spirv-reflect = "0.2.3"
+egui = "0.13.1"
+
 
 [target.'cfg(target_os = "macos")'.dependencies]
 metal = "0.17.0"
