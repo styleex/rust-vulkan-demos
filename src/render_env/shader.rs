@@ -109,6 +109,7 @@ pub struct Shader {
 
     constants: Option<ConstantsBuilder>,
     spec_info: Option<vk::SpecializationInfo>,
+    pub push_constants_range: vk::PushConstantRange,
 }
 
 impl Shader {
@@ -164,6 +165,19 @@ impl Shader {
                 .expect("Failed to create Shader Module!")
         };
 
+        let mut push_constants_range = vk::PushConstantRange {
+            stage_flags: shader_stage_flags,
+            offset: 0,
+            size: 0
+        };
+
+        for block in module.enumerate_push_constant_blocks(None) {
+            for var in block.iter() {
+                push_constants_range.offset = var.offset.min(push_constants_range.offset);
+                push_constants_range.size += var.size;
+            }
+        }
+
         Shader {
             shader_module,
             descriptor_sets: sets,
@@ -172,6 +186,7 @@ impl Shader {
             device: device.clone(),
             constants: None,
             spec_info: None,
+            push_constants_range: push_constants_range,
         }
     }
 
@@ -286,6 +301,7 @@ pub fn create_descriptor_set_layout(device: &ash::Device, shaders: Vec<&Shader>)
                 .create_descriptor_set_layout(&descriptor_layout_create_info, None)
                 .expect("Failed to create Descriptor Set Layout!")
         };
+
         ret_layouts.push(
             DescriptorSetLayout {
                 layout,

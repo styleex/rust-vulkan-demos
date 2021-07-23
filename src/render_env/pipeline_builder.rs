@@ -255,14 +255,23 @@ impl PipelineBuilder {
             .map(|x| x.layout)
             .collect();
 
+        let mut push_constant_ranges = Vec::new();
+        if self.vertex_shader.as_ref().unwrap().push_constants_range.size > 0 {
+            push_constant_ranges.push(self.vertex_shader.as_ref().unwrap().push_constants_range);
+        };
+
+        if self.fragment_shader.as_ref().unwrap().push_constants_range.size > 0 {
+            push_constant_ranges.push(self.fragment_shader.as_ref().unwrap().push_constants_range);
+        };
+
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
             s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::PipelineLayoutCreateFlags::empty(),
             set_layout_count: layout_vec.len() as u32,
             p_set_layouts: layout_vec.as_ptr(),
-            push_constant_range_count: 0,
-            p_push_constant_ranges: ptr::null(),
+            push_constant_range_count: push_constant_ranges.len() as u32,
+            p_push_constant_ranges: push_constant_ranges.as_ptr(),
         };
 
         let pipeline_layout = unsafe {

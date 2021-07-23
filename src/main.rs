@@ -12,9 +12,9 @@ use utils::{commands, pipeline, render_pass,
             sync, uniform_buffer, vertex};
 
 use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder};
+use crate::render_env::egui::EguiRenderer;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
-use crate::render_env::egui::EguiRenderer;
 
 mod utils;
 mod camera;
@@ -158,7 +158,7 @@ impl HelloApplication {
         egui_ctx.begin_frame(init_input);
         egui_ctx.end_frame();
 
-        let egui_renderer = EguiRenderer::new(&env, egui_ctx.clone());
+        let egui_renderer = EguiRenderer::new(&env, egui_ctx.clone(), quad_render_pass.clone());
         HelloApplication {
             env,
 
@@ -291,11 +291,17 @@ impl HelloApplication {
         let raw_input = egui::RawInput::default();
         self.egui_ctx.begin_frame(raw_input);
         egui::CentralPanel::default().show(&self.egui_ctx, |ui| {
+            ui.heading("Test");
+            ui.checkbox(&mut false, "Qwe");
+        });
+
+        egui::SidePanel::left("Qwe").show(&self.egui_ctx, |ui| {
             ui.heading("Test")
         });
 
         let (output, shapes) = self.egui_ctx.end_frame();
         let clipped_meshes = self.egui_ctx.tessellate(shapes);
+        self.egui_render.render(clipped_meshes);
 
         let submit_infos = [
             vk::SubmitInfo {

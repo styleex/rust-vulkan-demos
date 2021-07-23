@@ -13,7 +13,6 @@ pub fn create_graphics_pipeline(
     let vert_shader_module = shader::Shader::load(&device, "shaders/spv/09-shader-base.vert.spv");
     let frag_shader_module = shader::Shader::load(&device, "shaders/spv/09-shader-base.frag.spv");
 
-
     PipelineBuilder::new(device, render_pass, 0)
         .vertex_shader(vert_shader_module)
         .fragment_shader(frag_shader_module)
