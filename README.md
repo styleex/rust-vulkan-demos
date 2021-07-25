@@ -13,7 +13,7 @@ Plan:
     
     * (OK) Framebuffer + attachment image for simplifying offscreen buffer creation.
 
-* Imgui integration 
+* (OK) egui integration 
   
 * Deferred shading pipeline 
 
@@ -29,11 +29,12 @@ Plan:
 * [Vulkan SDK](https://vulkan.lunarg.com/doc/view/1.1.126.0/linux/getting_started.html#user-content-download-and-install-packages-for-building-binaries)
 * rust stable
 * glslc
+* python 3.8 (compile_shaders.py)
 
 # Run:
 
 > ./download_assets.py
 > 
-> ./compile_shaders.sh
+> ./compile_shaders.py
 > 
 > cargo run 
