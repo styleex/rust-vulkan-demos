@@ -11,13 +11,14 @@ pub struct DescriptorSet {
     pool: vk::DescriptorPool,
 }
 
-impl DescriptorSet {
-    pub fn destroy(&mut self) {
+impl Drop for DescriptorSet {
+    fn drop(&mut self) {
         unsafe {
             self.device.destroy_descriptor_pool(self.pool, None);
         }
     }
 }
+
 
 // From existing shader::DescriptorSetLayout:
 //  1. Create pool with descriptors

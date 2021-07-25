@@ -12,7 +12,7 @@ use utils::{commands, pipeline, render_pass,
             sync, uniform_buffer, vertex};
 
 use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder};
-use crate::render_env::egui::EguiRenderer;
+use crate::render_env::egui::{Egui, egui_to_winit_cursor_icon};
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
 
@@ -23,7 +23,7 @@ mod render_env;
 
 
 struct HelloApplication {
-    egui_render: EguiRenderer,
+    egui: Egui,
     egui_ctx: egui::CtxRef,
 
     swapchain_stuff: render_env::swapchain::SwapChain,
@@ -160,7 +160,7 @@ impl HelloApplication {
 
         println!("{}", wnd.scale_factor());
 
-        let egui_renderer = EguiRenderer::new(env.clone(), egui_ctx.clone(), quad_render_pass.clone());
+        let egui_renderer = Egui::new(env.clone(), egui_ctx.clone(), swapchain_stuff.format);
         HelloApplication {
             env,
 
@@ -189,7 +189,7 @@ impl HelloApplication {
 
             draw_quad_primary_cmds: quad_command_buffers,
             egui_ctx,
-            egui_render: egui_renderer,
+            egui: egui_renderer,
         }
     }
 
@@ -198,6 +198,8 @@ impl HelloApplication {
 
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
+
+            self.egui.handle_event(self.egui_ctx.clone(), &event);
 
             match event {
                 Event::WindowEvent { event, window_id } => {
@@ -292,35 +294,28 @@ impl HelloApplication {
         }
         self.geometry_pass_cmds[self.current_frame] = geometry_pass_cmd;
 
-        let raw_input = egui::RawInput::default();
         self.egui_ctx.set_visuals(egui::style::Visuals::dark());
-        self.egui_ctx.begin_frame(raw_input);
-            egui::SidePanel::left("my_side_panel").show(&self.egui_ctx, |ui| {
+        self.egui_ctx.begin_frame(self.egui.raw_input());
+            egui::SidePanel::left("my_side_panel").frame(egui::Frame{
+                margin: Default::default(),
+                corner_radius: 0.0,
+                shadow: Default::default(),
+                fill: egui::Color32::TRANSPARENT,
+                stroke: Default::default()
+            }).show(&self.egui_ctx, |ui| {
                 ui.heading("Hello");
-                ui.label("Hello egui!");
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label("Theme");
-                });
-                ui.separator();
-                ui.hyperlink("https://github.com/emilk/egui");
-                ui.separator();
-                ui.label("Rotation");
-                ui.label("Light Position");
-                ui.separator();
+                ui.checkbox(&mut true, "example");
             });
-        // egui::SidePanel::left("Qwe").show(&self.egui_ctx, |ui| {
-        //     ui.heading("Test")
-        // });
 
-        let (_output, shapes) = self.egui_ctx.end_frame();
+        let (output, shapes) = self.egui_ctx.end_frame();
         let clipped_meshes = self.egui_ctx.tessellate(shapes);
-        let gui_render_op = self.egui_render.render(
+        let gui_render_op = self.egui.render(
             clipped_meshes,
             self.swapchain_stuff.framebuffers[image_index as usize],
             [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height],
             MAX_FRAMES_IN_FLIGHT,
         );
+        wnd.set_cursor_icon(egui_to_winit_cursor_icon(output.cursor_icon).unwrap());
 
         let submit_infos = [
             vk::SubmitInfo {
@@ -460,10 +455,7 @@ impl HelloApplication {
 
     fn cleanup_swapchain(&mut self) {
         self.swapchain_stuff.destroy();
-
-        for mut set in self.quad_descriptors.drain(0..) {
-            set.destroy();
-        }
+        self.quad_descriptors.clear();
     }
 }
 
@@ -472,8 +464,6 @@ impl Drop for HelloApplication {
         unsafe {
             self.sync.destroy();
             self.cleanup_swapchain();
-
-            self.descriptor_set_second.destroy();
 
             self.framebuffer.destroy();
             self.env.device().destroy_render_pass(self.quad_render_pass, None);
