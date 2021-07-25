@@ -1,23 +1,22 @@
 use core::mem;
-use std::{ptr, ffi};
+use std::{ffi, ptr};
 
 use ash::version::DeviceV1_0;
 use ash::vk;
 
 use crate::render_env::env::RenderEnv;
-use crate::utils::buffer_utils::find_memory_type;
-use std::ffi::c_void;
 
 pub struct CpuBuffer {
     buffer_memory: vk::DeviceMemory,
-    buffer: vk::Buffer,
+    pub buffer: vk::Buffer,
 
     device: ash::Device,
-    size: u64,
 }
 
 impl CpuBuffer {
-    pub fn new(env: &RenderEnv, size: u64, usage: vk::BufferUsageFlags) -> CpuBuffer {
+    pub fn from_vec<T>(env: &RenderEnv, usage: vk::BufferUsageFlags, data: &Vec<T>) -> CpuBuffer {
+        let size = (data.len() * mem::size_of::<T>()) as u64;
+
         let buffer_create_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BUFFER_CREATE_INFO,
             p_next: ptr::null(),
@@ -54,30 +53,42 @@ impl CpuBuffer {
                 .expect("Failed to allocate buffer memory!")
         };
 
-        CpuBuffer {
-            device: env.device().clone(),
-
-            buffer_memory,
-            buffer,
-            size,
-        }
-    }
-
-    pub fn upload_data<T: Sized>(&mut self, data: T) {
         unsafe {
-            let mem = self.device.map_memory(self.buffer_memory, 0, vk::WHOLE_SIZE, vk::MemoryMapFlags::empty()).unwrap();
-            mem.copy_from_nonoverlapping(&data as *const _ as *const ffi::c_void, mem::size_of_val(&data));
-            self.device.unmap_memory(self.buffer_memory);
+            env.device().bind_buffer_memory(buffer, buffer_memory, 0).unwrap();
+        }
 
-            self.device.flush_mapped_memory_ranges(&[
-                vk::MappedMemoryRange{
+        unsafe {
+            let mem = env.device()
+                .map_memory(buffer_memory, 0, vk::WHOLE_SIZE, vk::MemoryMapFlags::empty())
+                .unwrap() as *mut T;
+            mem.copy_from_nonoverlapping(data.as_ptr(), data.len());
+            env.device().unmap_memory(buffer_memory);
+
+            env.device().flush_mapped_memory_ranges(&[
+                vk::MappedMemoryRange {
                     s_type: vk::StructureType::MAPPED_MEMORY_RANGE,
                     p_next: ptr::null(),
-                    memory: self.buffer_memory,
+                    memory: buffer_memory,
                     offset: 0,
                     size: vk::WHOLE_SIZE,
                 }
             ]);
         };
+
+        CpuBuffer {
+            device: env.device().clone(),
+
+            buffer_memory,
+            buffer,
+        }
+    }
+}
+
+impl Drop for CpuBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_buffer(self.buffer, None);
+            self.device.free_memory(self.buffer_memory, None);
+        }
     }
 }

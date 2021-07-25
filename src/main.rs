@@ -26,8 +26,6 @@ struct HelloApplication {
     egui_render: EguiRenderer,
     egui_ctx: egui::CtxRef,
 
-    env: Arc<env::RenderEnv>,
-
     swapchain_stuff: render_env::swapchain::SwapChain,
 
     vertex_buffer: vertex::VertexBuffer,
@@ -53,6 +51,8 @@ struct HelloApplication {
     quad_render_pass: vk::RenderPass,
     quad_descriptors: Vec<descriptors::DescriptorSet>,
     draw_quad_primary_cmds: Vec<vk::CommandBuffer>,  // Per frame command buffers
+
+    env: Arc<env::RenderEnv>,
 }
 
 impl HelloApplication {
@@ -151,14 +151,14 @@ impl HelloApplication {
 
         let sync = sync::create_sync_objects(env.device());
 
-        let mut egui_ctx = egui::Context::new();
+        let mut egui_ctx = egui::CtxRef::default();
         let mut init_input = egui::RawInput::default();
         init_input.pixels_per_point = Some(wnd.scale_factor() as f32);
 
         egui_ctx.begin_frame(init_input);
-        egui_ctx.end_frame();
+        let (_output, _shapes) = egui_ctx.end_frame();
 
-        let egui_renderer = EguiRenderer::new(&env, egui_ctx.clone(), quad_render_pass.clone());
+        let egui_renderer = EguiRenderer::new(env.clone(), egui_ctx.clone(), quad_render_pass.clone());
         HelloApplication {
             env,
 
@@ -272,6 +272,8 @@ impl HelloApplication {
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let first_pass_finished = [self.sync.render_finished_semaphores[self.current_frame]];
         let second_pass_finished = [self.sync.render_quad_semaphore];
+        let gui_finished = [self.sync.render_gui_semaphore];
+
 
         let geometry_pass_cmd = frame_buffer::draw_to_framebuffer(
             &self.env, &self.framebuffer,
@@ -292,16 +294,21 @@ impl HelloApplication {
         self.egui_ctx.begin_frame(raw_input);
         egui::CentralPanel::default().show(&self.egui_ctx, |ui| {
             ui.heading("Test");
-            ui.checkbox(&mut false, "Qwe");
+            // ui.checkbox(&mut false, "Qwe");
         });
 
-        egui::SidePanel::left("Qwe").show(&self.egui_ctx, |ui| {
-            ui.heading("Test")
-        });
+        // egui::SidePanel::left("Qwe").show(&self.egui_ctx, |ui| {
+        //     ui.heading("Test")
+        // });
 
-        let (output, shapes) = self.egui_ctx.end_frame();
+        let (_output, shapes) = self.egui_ctx.end_frame();
         let clipped_meshes = self.egui_ctx.tessellate(shapes);
-        self.egui_render.render(clipped_meshes);
+        let gui_render_op = self.egui_render.render(
+            clipped_meshes,
+            self.swapchain_stuff.framebuffers[image_index as usize],
+            [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height],
+            MAX_FRAMES_IN_FLIGHT,
+        );
 
         let submit_infos = [
             vk::SubmitInfo {
@@ -325,6 +332,17 @@ impl HelloApplication {
                 p_command_buffers: [self.draw_quad_primary_cmds[image_index as usize]].as_ptr(),
                 signal_semaphore_count: second_pass_finished.len() as u32,
                 p_signal_semaphores: second_pass_finished.as_ptr(),
+            },
+            vk::SubmitInfo {
+                s_type: vk::StructureType::SUBMIT_INFO,
+                p_next: ptr::null(),
+                wait_semaphore_count: second_pass_finished.len() as u32,
+                p_wait_semaphores: second_pass_finished.as_ptr(),
+                p_wait_dst_stage_mask: wait_stages.as_ptr(),
+                command_buffer_count: 1,
+                p_command_buffers: [gui_render_op].as_ptr(),
+                signal_semaphore_count: gui_finished.len() as u32,
+                p_signal_semaphores: gui_finished.as_ptr(),
             }
         ];
 
@@ -347,7 +365,7 @@ impl HelloApplication {
             s_type: vk::StructureType::PRESENT_INFO_KHR,
             p_next: ptr::null(),
             wait_semaphore_count: 1,
-            p_wait_semaphores: second_pass_finished.as_ptr(),
+            p_wait_semaphores: gui_finished.as_ptr(),
             swapchain_count: 1,
             p_swapchains: swapchains.as_ptr(),
             p_image_indices: &image_index,
@@ -390,7 +408,7 @@ impl HelloApplication {
         self.framebuffer.resize_swapchain(dimensions);
 
         let mut quad_descriptors = Vec::new();
-        for img_view in self.swapchain_stuff.image_views.iter() {
+        for _img_view in self.swapchain_stuff.image_views.iter() {
             quad_descriptors.push(
                 descriptors::DescriptorSetBuilder::new(
                     self.env.device(),
@@ -443,14 +461,10 @@ impl Drop for HelloApplication {
             self.sync.destroy();
             self.cleanup_swapchain();
 
-            self.quad_pipeline.destroy();
-
             self.descriptor_set_second.destroy();
-            self.pipeline_second.destroy();
 
             self.framebuffer.destroy();
             self.env.device().destroy_render_pass(self.quad_render_pass, None);
-            self.texture.destroy();
 
             self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();

@@ -13,8 +13,8 @@ pub struct Pipeline {
     pub graphics_pipeline: vk::Pipeline,
 }
 
-impl Pipeline {
-    pub fn destroy(&self) {
+impl Drop for Pipeline {
+    fn drop(&mut self) {
         unsafe {
             self.device.destroy_pipeline(self.graphics_pipeline, None);
 
@@ -233,6 +233,12 @@ impl PipelineBuilder {
             max_depth_bounds: 1.0,
             min_depth_bounds: 0.0,
         };
+
+        self
+    }
+
+    pub fn disable_culling(mut self) -> Self {
+        self.rasterization.cull_mode = vk::CullModeFlags::NONE;
 
         self
     }

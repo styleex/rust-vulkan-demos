@@ -202,6 +202,20 @@ impl RenderEnv {
         }
     }
 
+    pub fn create_primary_command_buffer(&self) -> vk::CommandBuffer {
+        let create_info = vk::CommandBufferAllocateInfo {
+            s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
+            p_next: ptr::null(),
+            command_pool: self.command_pool,
+            level: vk::CommandBufferLevel::PRIMARY,
+            command_buffer_count: 1
+        };
+
+        unsafe {
+            self.device.allocate_command_buffers(&create_info).unwrap().pop().unwrap()
+        }
+    }
+
     pub(crate) fn find_memory_type(&self, type_filter: u32, required_properties: vk::MemoryPropertyFlags) -> u32 {
         for (i, memory_type) in self.mem_properties.memory_types.iter().enumerate() {
             if (type_filter & (1 << i)) > 0

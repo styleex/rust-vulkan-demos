@@ -1,7 +1,6 @@
 use std::cmp::max;
 use std::path::Path;
 use std::ptr;
-use std::time::Instant;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -65,8 +64,10 @@ impl Texture {
             _mip_levels: mip_levels,
         }
     }
+}
 
-    pub fn destroy(&self) {
+impl Drop for Texture {
+    fn drop(&mut self) {
         unsafe {
             self.device.destroy_sampler(self.texture_sampler, None);
             self.device.destroy_image_view(self.texture_image_view, None);
@@ -75,7 +76,6 @@ impl Texture {
         }
     }
 }
-
 
 fn create_texture_image(
     device: &ash::Device,

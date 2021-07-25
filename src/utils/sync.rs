@@ -13,6 +13,7 @@ pub struct SyncObjects {
     pub render_finished_semaphores: Vec<vk::Semaphore>,
     pub inflight_fences: Vec<vk::Fence>,
     pub render_quad_semaphore: vk::Semaphore,
+    pub render_gui_semaphore: vk::Semaphore,
 }
 
 impl SyncObjects {
@@ -31,6 +32,7 @@ impl SyncObjects {
             }
 
             self.device.destroy_semaphore(self.render_quad_semaphore, None);
+            self.device.destroy_semaphore(self.render_gui_semaphore, None);
         }
     }
 }
@@ -44,6 +46,7 @@ pub fn create_sync_objects(device: &ash::Device) -> SyncObjects {
         render_finished_semaphores: vec![],
         inflight_fences: vec![],
         render_quad_semaphore: vk::Semaphore::null(),
+        render_gui_semaphore: vk::Semaphore::null(),
     };
 
     let semaphore_create_info = vk::SemaphoreCreateInfo {
@@ -83,6 +86,10 @@ pub fn create_sync_objects(device: &ash::Device) -> SyncObjects {
 
     unsafe {
         sync_objects.render_quad_semaphore = device
+            .create_semaphore(&semaphore_create_info, None)
+            .expect("Failed to create Semaphore Object!");
+
+        sync_objects.render_gui_semaphore = device
             .create_semaphore(&semaphore_create_info, None)
             .expect("Failed to create Semaphore Object!");
     };
