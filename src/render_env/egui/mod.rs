@@ -37,6 +37,7 @@ pub struct EguiRenderer {
     render_pass: vk::RenderPass,
     env: Arc<RenderEnv>,
     descriptor_set: DescriptorSet,
+    sampler: vk::Sampler,
 }
 
 impl EguiRenderer {
@@ -45,14 +46,21 @@ impl EguiRenderer {
         ctx.set_style(egui::Style::default());
 
         let font_tx = ctx.texture();
+        let data = font_tx
+            .pixels
+            .iter()
+            .flat_map(|&r| vec![r, r, r, r])
+            .collect::<Vec<_>>();
         let texture = Texture::from_pixels(
             env.device().clone(),
             env.command_pool(),
             env.queue(),
             &env.mem_properties,
-            &font_tx.pixels,
+            vk::Format::R8G8B8A8_UNORM,
+            &data,
             font_tx.width as u32,
             font_tx.height as u32,
+            false,
         );
 
         let vs = Shader::load(env.device(), "shaders/spv/egui/egui.vert.spv");
@@ -61,7 +69,7 @@ impl EguiRenderer {
         let vertex_bindings = vec![
             vk::VertexInputBindingDescription {
                 binding: 0,
-                stride: mem::size_of::<egui::epaint::Vertex>() as u32,
+                stride: 4 * std::mem::size_of::<f32>() as u32 + 4 * std::mem::size_of::<u8>() as u32,
                 input_rate: vk::VertexInputRate::VERTEX,
             }
         ];
@@ -82,22 +90,51 @@ impl EguiRenderer {
             vk::VertexInputAttributeDescription {
                 location: 2,
                 binding: 0,
-                format: vk::Format::R8G8B8A8_SINT,
+                format: vk::Format::R8G8B8A8_UNORM,
                 offset: 16,
             },
         ];
+
+        let sampler_create_info = vk::SamplerCreateInfo {
+            s_type: vk::StructureType::SAMPLER_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::SamplerCreateFlags::empty(),
+            mag_filter: vk::Filter::LINEAR,
+            min_filter: vk::Filter::LINEAR,
+            address_mode_u: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            address_mode_v: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            address_mode_w: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            anisotropy_enable: vk::FALSE,
+            max_anisotropy: 16.0,
+            compare_enable: vk::FALSE,
+            compare_op: vk::CompareOp::ALWAYS,
+
+            mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+            min_lod: 0.0,
+            max_lod: vk::LOD_CLAMP_NONE,
+            mip_lod_bias: 0.0,
+
+            border_color: vk::BorderColor::INT_OPAQUE_BLACK,
+            unnormalized_coordinates: vk::FALSE,
+        };
+
+        let sampler = unsafe {
+            env.device()
+                .create_sampler(&sampler_create_info, None)
+                .expect("Failed to create Sampler!")
+        };
 
         let pipeline = PipelineBuilder::new(env.device().clone(), render_pass, 0)
             .vertex_input(vertex_bindings, vert_attrs)
             .vertex_shader(vs)
             .fragment_shader(ps)
             .disable_culling()
+            .blend()
             .build();
 
         let descriptor_set = DescriptorSetBuilder::new(env.device(), &pipeline.descriptor_set_layouts[0])
-            .add_image(texture.texture_image_view, texture.texture_sampler)
+            .add_image(texture.texture_image_view, sampler)
             .build();
-
 
         EguiRenderer {
             env,
@@ -106,6 +143,7 @@ impl EguiRenderer {
             render_pass,
             render_ops: vec![],
             descriptor_set,
+            sampler,
         }
     }
 
@@ -114,6 +152,7 @@ impl EguiRenderer {
             self.render_ops.remove(0);
         }
 
+
         let mut vertices: Vec<egui::epaint::Vertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
@@ -121,6 +160,15 @@ impl EguiRenderer {
             vertices.extend(&mesh.1.vertices);
             indices.extend(&mesh.1.indices);
         }
+        // for vert in vertices.iter() {
+        //     println!("{:?}", vert);
+        // }
+        //
+        //         for vert in indices.iter() {
+        //     println!("{:?}", vert);
+        // }
+        //
+        // panic!("qwe");
 
         let vb = CpuBuffer::from_vec(&self.env, vk::BufferUsageFlags::VERTEX_BUFFER, &vertices);
         let ib = CpuBuffer::from_vec(&self.env, vk::BufferUsageFlags::INDEX_BUFFER, &indices);
@@ -171,20 +219,13 @@ impl EguiRenderer {
             max_depth: 1.0,
         }];
 
-        let scissors = [vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: vk::Extent2D {
-                width: dimensions[0],
-                height: dimensions[1],
-            },
-        }];
         unsafe {
             device.begin_command_buffer(cmd_buf, &begin_info);
 
             device.cmd_begin_render_pass(cmd_buf, &begin_render_pass, vk::SubpassContents::INLINE);
 
             device.cmd_set_viewport(cmd_buf, 0, viewports.as_ref());
-            device.cmd_set_scissor(cmd_buf, 0, scissors.as_ref());
+            // device.cmd_set_scissor(cmd_buf, 0, scissors.as_ref());
 
             let vertex_buffers = [vb.buffer];
             let offsets = [0];
@@ -196,7 +237,62 @@ impl EguiRenderer {
             device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline_layout,
                                             0, &bind_descriptors, &[]);
 
-            device.cmd_draw_indexed(cmd_buf, indices.len() as u32, 1, 0, 0, 0);
+            let mut index_base = 0;
+            let mut vertex_base = 0;
+            for egui::ClippedMesh(rect, mesh) in meshes.iter() {
+                let min = rect.min;
+                let scale_factor = 1.0;
+
+                let min = egui::Pos2 {
+                    x: min.x * scale_factor as f32,
+                    y: min.y * scale_factor as f32,
+                };
+                let min = egui::Pos2 {
+                    x: f32::clamp(min.x, 0.0, dimensions[0] as f32),
+                    y: f32::clamp(min.y, 0.0, dimensions[1] as f32),
+                };
+                let max = rect.max;
+                let max = egui::Pos2 {
+                    x: max.x * scale_factor as f32,
+                    y: max.y * scale_factor as f32,
+                };
+                let max = egui::Pos2 {
+                    x: f32::clamp(max.x, min.x, dimensions[0] as f32),
+                    y: f32::clamp(max.y, min.y, dimensions[1] as f32),
+                };
+
+                device.cmd_set_scissor(
+                    cmd_buf,
+                    0,
+                    &[vk::Rect2D::builder()
+                        .offset(
+                            vk::Offset2D::builder()
+                                .x(min.x.round() as i32)
+                                .y(min.y.round() as i32)
+                                .build(),
+                        )
+                        .extent(
+                            vk::Extent2D::builder()
+                                .width((max.x.round() - min.x) as u32)
+                                .height((max.y.round() - min.y) as u32)
+                                .build(),
+                        )
+                        .build()],
+                );
+
+                device.cmd_draw_indexed(
+                    cmd_buf,
+                    mesh.indices.len() as u32,
+                    1,
+                    index_base,
+                    vertex_base,
+                    0,
+                );
+
+                index_base += mesh.indices.len() as u32;
+                vertex_base += mesh.vertices.len() as i32;
+            }
+
             device.cmd_end_render_pass(cmd_buf);
             device.end_command_buffer(cmd_buf).unwrap();
         }

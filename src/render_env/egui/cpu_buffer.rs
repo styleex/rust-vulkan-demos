@@ -59,10 +59,9 @@ impl CpuBuffer {
 
         unsafe {
             let mem = env.device()
-                .map_memory(buffer_memory, 0, vk::WHOLE_SIZE, vk::MemoryMapFlags::empty())
+                .map_memory(buffer_memory, 0, mem_requirements.size, vk::MemoryMapFlags::empty())
                 .unwrap() as *mut T;
             mem.copy_from_nonoverlapping(data.as_ptr(), data.len());
-            env.device().unmap_memory(buffer_memory);
 
             env.device().flush_mapped_memory_ranges(&[
                 vk::MappedMemoryRange {
@@ -70,9 +69,11 @@ impl CpuBuffer {
                     p_next: ptr::null(),
                     memory: buffer_memory,
                     offset: 0,
-                    size: vk::WHOLE_SIZE,
+                    size: mem_requirements.size,
                 }
-            ]);
+            ]).unwrap();
+
+            env.device().unmap_memory(buffer_memory);
         };
 
         CpuBuffer {

@@ -158,6 +158,8 @@ impl HelloApplication {
         egui_ctx.begin_frame(init_input);
         let (_output, _shapes) = egui_ctx.end_frame();
 
+        println!("{}", wnd.scale_factor());
+
         let egui_renderer = EguiRenderer::new(env.clone(), egui_ctx.clone(), quad_render_pass.clone());
         HelloApplication {
             env,
@@ -291,12 +293,22 @@ impl HelloApplication {
         self.geometry_pass_cmds[self.current_frame] = geometry_pass_cmd;
 
         let raw_input = egui::RawInput::default();
+        self.egui_ctx.set_visuals(egui::style::Visuals::dark());
         self.egui_ctx.begin_frame(raw_input);
-        egui::CentralPanel::default().show(&self.egui_ctx, |ui| {
-            ui.heading("Test");
-            // ui.checkbox(&mut false, "Qwe");
-        });
-
+            egui::SidePanel::left("my_side_panel").show(&self.egui_ctx, |ui| {
+                ui.heading("Hello");
+                ui.label("Hello egui!");
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Theme");
+                });
+                ui.separator();
+                ui.hyperlink("https://github.com/emilk/egui");
+                ui.separator();
+                ui.label("Rotation");
+                ui.label("Light Position");
+                ui.separator();
+            });
         // egui::SidePanel::left("Qwe").show(&self.egui_ctx, |ui| {
         //     ui.heading("Test")
         // });

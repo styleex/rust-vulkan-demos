@@ -16,6 +16,7 @@ pub struct Texture {
     pub texture_image_view: vk::ImageView,
     pub texture_sampler: vk::Sampler,
     _mip_levels: u32,
+    format: vk::Format,
 }
 
 impl Texture {
@@ -38,20 +39,22 @@ impl Texture {
 
         let (image_width, image_height) = (image_object.width(), image_object.height());
 
-        Texture::from_pixels(device, command_pool, submit_queue, device_memory_properties, &image_data, image_width, image_height)
+        Texture::from_pixels(device, command_pool, submit_queue, device_memory_properties, vk::Format::R8G8B8A8_SRGB,
+                             &image_data, image_width, image_height, true)
     }
 
     pub fn from_pixels(device: ash::Device,
                        command_pool: vk::CommandPool,
                        submit_queue: vk::Queue,
                        device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-                       pixel_data: &Vec<u8>, width: u32, height: u32) -> Texture
+                       format: vk::Format,
+                       pixel_data: &Vec<u8>, width: u32, height: u32, create_mips: bool) -> Texture
     {
         let (texture_image, texture_image_memory, mip_levels) = create_texture_image(
-            &device, command_pool, submit_queue, device_memory_properties, pixel_data, width, height);
+            &device, command_pool, submit_queue, device_memory_properties, format, pixel_data, width, height, create_mips);
 
         let texture_image_view = create_image_view(
-            &device, texture_image, vk::Format::R8G8B8A8_SRGB,
+            &device, texture_image, format,
             vk::ImageAspectFlags::COLOR, mip_levels);
         let texture_sampler = create_texture_sampler(&device, mip_levels);
 
@@ -62,6 +65,7 @@ impl Texture {
             texture_image_view,
             texture_sampler,
             _mip_levels: mip_levels,
+            format,
         }
     }
 }
@@ -82,15 +86,24 @@ fn create_texture_image(
     command_pool: vk::CommandPool,
     submit_queue: vk::Queue,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-    image_data: &Vec<u8>, image_width: u32, image_height: u32,
+    format: vk::Format,
+    image_data: &Vec<u8>,
+    image_width: u32,
+    image_height: u32,
+    create_mips: bool,
 ) -> (vk::Image, vk::DeviceMemory, u32)
 {
     let image_size = (std::mem::size_of::<u8>() as u32 * image_width * image_height * 4) as vk::DeviceSize;
 
-    let mip_levels = ((::std::cmp::max(image_width, image_height) as f32)
-        .log2()
-        .floor() as u32)
-        + 1;
+    let mip_levels = if create_mips {
+        ((::std::cmp::max(image_width, image_height) as f32)
+            .log2()
+            .floor() as u32)
+            + 1
+    } else {
+        1
+    };
+
 
     if image_size <= 0 {
         panic!("Failed to load texture image!")
@@ -125,7 +138,7 @@ fn create_texture_image(
         image_height,
         mip_levels,
         vk::SampleCountFlags::TYPE_1,
-        vk::Format::R8G8B8A8_SRGB,
+        format,
         vk::ImageTiling::OPTIMAL,
         vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -137,7 +150,7 @@ fn create_texture_image(
         command_pool,
         submit_queue,
         texture_image,
-        vk::Format::R8G8B8A8_SRGB,
+        format,
         vk::ImageLayout::UNDEFINED,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
         mip_levels,
@@ -158,15 +171,16 @@ fn create_texture_image(
         device.free_memory(staging_buffer_memory, None);
     }
 
-    generate_mipmaps(
-        device,
-        command_pool,
-        submit_queue,
-        texture_image,
-        image_width,
-        image_height,
-        mip_levels,
-    );
+
+        generate_mipmaps(
+            device,
+            command_pool,
+            submit_queue,
+            texture_image,
+            image_width,
+            image_height,
+            mip_levels,
+        );
 
     (texture_image, texture_image_memory, mip_levels)
 }

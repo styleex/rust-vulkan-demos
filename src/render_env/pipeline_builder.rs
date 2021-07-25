@@ -208,6 +208,26 @@ impl PipelineBuilder {
         self
     }
 
+    pub fn blend(mut self) -> Self {
+        let color_blend_attachments = vec![
+            vk::PipelineColorBlendAttachmentState::builder()
+                .color_write_mask(
+                    vk::ColorComponentFlags::R
+                        | vk::ColorComponentFlags::G
+                        | vk::ColorComponentFlags::B
+                        | vk::ColorComponentFlags::A,
+                )
+                .blend_enable(true)
+                .src_color_blend_factor(vk::BlendFactor::ONE)
+                .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .build()
+        ];
+
+        self.color_blend_attachment_states = color_blend_attachments;
+
+        self
+    }
+
     pub fn with_depth_test(mut self) -> Self {
         let stencil_state = vk::StencilOpState {
             fail_op: vk::StencilOp::KEEP,
@@ -296,8 +316,12 @@ impl PipelineBuilder {
             p_dynamic_states: dynamic_state.as_ptr(),
         };
 
-        self.color_blend.attachment_count = self.color_blend_attachment_states.len() as u32;
-        self.color_blend.p_attachments = self.color_blend_attachment_states.as_ptr();
+        // self.color_blend.attachment_count = self.color_blend_attachment_states.len() as u32;
+        // self.color_blend.p_attachments = self.color_blend_attachment_states.as_ptr();
+
+        let color_blend = vk::PipelineColorBlendStateCreateInfo::builder()
+            .attachments(&self.color_blend_attachment_states)
+            .build();
 
         if !self.vertex_input_bindings.is_empty() {
             self.vertex_input.vertex_binding_description_count = self.vertex_input_bindings.len() as u32;
@@ -328,7 +352,7 @@ impl PipelineBuilder {
                 p_rasterization_state: &self.rasterization,
                 p_multisample_state: &self.multisampling,
                 p_depth_stencil_state: &self.depth_stencil,
-                p_color_blend_state: &self.color_blend,
+                p_color_blend_state: &color_blend,
                 p_dynamic_state: &dynamic_state_info,
                 layout: pipeline_layout,
 
