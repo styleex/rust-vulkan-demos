@@ -8,6 +8,7 @@ use crate::render_env::attachment_texture::AttachmentImage;
 use crate::render_env::env;
 use crate::render_env::env::RenderEnv;
 use crate::render_env::utils::format_has_depth;
+use ash::vk::RenderPass;
 
 #[derive(Clone)]
 pub struct AttachmentDesciption {
@@ -15,7 +16,7 @@ pub struct AttachmentDesciption {
     pub samples_count: vk::SampleCountFlags,
 }
 
-pub struct FrameBuffer {
+pub struct Framebuffer {
     env: Arc<env::RenderEnv>,
     attachment_desc: Vec<AttachmentDesciption>,
     render_pass: vk::RenderPass,
@@ -25,11 +26,11 @@ pub struct FrameBuffer {
     dimensions: [u32; 2],
 }
 
-impl FrameBuffer {
-    pub fn new(env: Arc<env::RenderEnv>, attachment_desc: Vec<AttachmentDesciption>) -> FrameBuffer {
-        let render_pass = FrameBuffer::_create_render_pass(env.device(), &attachment_desc);
+impl Framebuffer {
+    pub fn new(env: Arc<env::RenderEnv>, attachment_desc: Vec<AttachmentDesciption>) -> Framebuffer {
+        let render_pass = Framebuffer::_create_render_pass(env.device(), &attachment_desc);
 
-        FrameBuffer {
+        Framebuffer {
             env,
             attachment_desc,
             render_pass,
@@ -214,9 +215,31 @@ impl FrameBuffer {
     }
 }
 
+pub trait AbstractFrameBuffer {
+    fn render_pass(&self) -> vk::RenderPass;
+    fn framebuffer(&self) -> vk::Framebuffer;
+    fn dimensions(&self) -> [u32; 2];
+}
 
-pub fn draw_to_framebuffer<F>(env: &RenderEnv, clear_color: [f32; 3], fb: &FrameBuffer, f: F) -> vk::CommandBuffer
+
+impl AbstractFrameBuffer for Framebuffer {
+    fn render_pass(&self) -> RenderPass {
+        self.render_pass
+    }
+
+    fn framebuffer(&self) -> vk::Framebuffer {
+        self.framebuffer.unwrap()
+    }
+
+    fn dimensions(&self) -> [u32; 2] {
+        self.dimensions
+    }
+}
+
+
+pub fn draw_to_framebuffer<B, F>(env: &RenderEnv, clear_color: [f32; 3], fb: &B, draw_f: F) -> vk::CommandBuffer
     where
+        B: AbstractFrameBuffer,
         F: Fn(vk::CommandBuffer)
 {
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
@@ -265,13 +288,13 @@ pub fn draw_to_framebuffer<F>(env: &RenderEnv, clear_color: [f32; 3], fb: &Frame
     let render_pass_begin_info = vk::RenderPassBeginInfo {
         s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
         p_next: ptr::null(),
-        render_pass: fb.render_pass,
-        framebuffer: fb.framebuffer.unwrap(),
+        render_pass: fb.render_pass(),
+        framebuffer: fb.framebuffer(),
         render_area: vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
             extent: vk::Extent2D {
-                width: fb.dimensions[0],
-                height: fb.dimensions[1],
+                width: fb.dimensions()[0],
+                height: fb.dimensions()[1],
             },
         },
         clear_value_count: clear_values.len() as u32,
@@ -285,7 +308,7 @@ pub fn draw_to_framebuffer<F>(env: &RenderEnv, clear_color: [f32; 3], fb: &Frame
             vk::SubpassContents::SECONDARY_COMMAND_BUFFERS,
         );
 
-        f(command_buffer);
+        draw_f(command_buffer);
 
         env.device().cmd_end_render_pass(command_buffer);
 

@@ -41,14 +41,14 @@ struct HelloApplication {
     msaa_samples: vk::SampleCountFlags,
     camera: camera::Camera,
 
-    framebuffer: frame_buffer::FrameBuffer,
+    framebuffer: frame_buffer::Framebuffer,
 
     draw_mesh_second_cmd: vk::CommandBuffer,
-    geometry_pass_cmds: [vk::CommandBuffer; MAX_FRAMES_IN_FLIGHT],
-    pipeline_second: pipeline_builder::Pipeline,
-    descriptor_set_second: descriptors::DescriptorSet,
+    draw_mesh_commands: [vk::CommandBuffer; MAX_FRAMES_IN_FLIGHT],
+    draw_mesh_pipeline: pipeline_builder::Pipeline,
+    draw_mesh_descriptor_set: descriptors::DescriptorSet,
 
-    quad_render_pass: vk::RenderPass,
+    final_render_pass: vk::RenderPass,
     env: Arc<env::RenderEnv>,
 
     clear_color: [f32; 3],
@@ -87,7 +87,7 @@ impl HelloApplication {
         );
 
         let dimensions = [swapchain_stuff.size.width, swapchain_stuff.size.height];
-        let mut offscreen_framebuffer = frame_buffer::FrameBuffer::new(env.clone(), vec!(
+        let mut offscreen_framebuffer = frame_buffer::Framebuffer::new(env.clone(), vec!(
             frame_buffer::AttachmentDesciption {
                 samples_count: msaa_samples,
                 format: vk::Format::R8G8B8A8_SRGB,
@@ -145,14 +145,14 @@ impl HelloApplication {
 
             framebuffer: offscreen_framebuffer,
             draw_mesh_second_cmd: draw_mesh_cmd,
-            geometry_pass_cmds: [vk::CommandBuffer::null(), vk::CommandBuffer::null()],
-            pipeline_second: draw_mesh_pipeline,
-            descriptor_set_second: draw_mesh_descriptor_set,
+            draw_mesh_commands: [vk::CommandBuffer::null(), vk::CommandBuffer::null()],
+            draw_mesh_pipeline: draw_mesh_pipeline,
+            draw_mesh_descriptor_set: draw_mesh_descriptor_set,
 
             egui,
 
             clear_color: [0.0, 0.0, 0.0],
-            quad_render_pass,
+            final_render_pass: quad_render_pass,
         }
     }
 
@@ -254,11 +254,11 @@ impl HelloApplication {
             });
 
         unsafe {
-            if self.geometry_pass_cmds[self.current_frame] != vk::CommandBuffer::null() {
-                self.env.device().free_command_buffers(self.env.command_pool(), &[self.geometry_pass_cmds[self.current_frame]]);
+            if self.draw_mesh_commands[self.current_frame] != vk::CommandBuffer::null() {
+                self.env.device().free_command_buffers(self.env.command_pool(), &[self.draw_mesh_commands[self.current_frame]]);
             }
         }
-        self.geometry_pass_cmds[self.current_frame] = geometry_pass_cmd;
+        self.draw_mesh_commands[self.current_frame] = geometry_pass_cmd;
 
         self.egui.begin_frame();
 
@@ -291,7 +291,7 @@ impl HelloApplication {
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [self.geometry_pass_cmds[self.current_frame]].as_ptr(),
+                p_command_buffers: [self.draw_mesh_commands[self.current_frame]].as_ptr(),
                 signal_semaphore_count: first_pass_finished.len() as u32,
                 p_signal_semaphores: first_pass_finished.as_ptr(),
             },
@@ -364,7 +364,7 @@ impl HelloApplication {
         self.cleanup_swapchain();
 
         self.swapchain_stuff = render_env::swapchain::SwapChain::new(&self.env, wnd.inner_size());
-        self.swapchain_stuff.create_framebuffers(self.env.device(), self.quad_render_pass);
+        self.swapchain_stuff.create_framebuffers(self.env.device(), self.final_render_pass);
 
         let dimensions = [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height];
         self.framebuffer.resize_swapchain(dimensions);
@@ -374,14 +374,14 @@ impl HelloApplication {
         self.draw_mesh_second_cmd = commands::create_second_command_buffers(
             self.env.device(),
             self.env.command_pool(),
-            self.pipeline_second.graphics_pipeline,
+            self.draw_mesh_pipeline.graphics_pipeline,
             self.framebuffer.render_pass(),
             self.swapchain_stuff.size,
             self.vertex_buffer.vertex_buffer,
             self.vertex_buffer.index_buffer,
             self.vertex_buffer.index_count,
-            self.pipeline_second.pipeline_layout,
-            self.descriptor_set_second.set,
+            self.draw_mesh_pipeline.pipeline_layout,
+            self.draw_mesh_descriptor_set.set,
         );
     }
 
@@ -397,7 +397,7 @@ impl Drop for HelloApplication {
             self.cleanup_swapchain();
 
             self.framebuffer.destroy();
-            self.env.device().destroy_render_pass(self.quad_render_pass, None);
+            self.env.device().destroy_render_pass(self.final_render_pass, None);
 
             self.uniform_buffers.destroy();
             self.vertex_buffer.destroy();

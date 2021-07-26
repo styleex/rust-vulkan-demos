@@ -7,7 +7,7 @@ use ash::vk;
 use crate::render_env::{descriptors, pipeline_builder, shader};
 use crate::render_env::descriptors::{DescriptorSet, DescriptorSetBuilder};
 use crate::render_env::env::RenderEnv;
-use crate::render_env::frame_buffer::FrameBuffer;
+use crate::render_env::frame_buffer::Framebuffer;
 use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 
 pub struct QuadRenderer {
@@ -23,7 +23,7 @@ pub struct QuadRenderer {
 }
 
 impl QuadRenderer {
-    pub fn new(env: Arc<RenderEnv>, framebuffer: &FrameBuffer, render_pass: vk::RenderPass, input_samples: vk::SampleCountFlags, dimensions: [u32; 2]) -> QuadRenderer {
+    pub fn new(env: Arc<RenderEnv>, framebuffer: &Framebuffer, render_pass: vk::RenderPass, input_samples: vk::SampleCountFlags, dimensions: [u32; 2]) -> QuadRenderer {
         let pipeline = {
             let vert_shader_module = shader::Shader::load(env.device(), "shaders/spv/compose.vert.spv");
             let frag_shader_module = shader::Shader::load(env.device(), "shaders/spv/compose.frag.spv")
@@ -248,7 +248,7 @@ impl QuadRenderer {
         command_buffer
     }
 
-    pub fn update_framebuffer(&mut self, framebuffer: &FrameBuffer, dimensions: [u32; 2]) {
+    pub fn update_framebuffer(&mut self, framebuffer: &Framebuffer, dimensions: [u32; 2]) {
         self.descriptor_set = DescriptorSetBuilder::new(
             self.env.device(), self.pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_image(framebuffer.attachments.get(0).unwrap().view, self.sampler)
@@ -262,10 +262,7 @@ impl Drop for QuadRenderer {
     fn drop(&mut self) {
         unsafe {
             self.env.device().destroy_sampler(self.sampler, None);
-
-            for buffer in self.buffers.iter() {
-                self.env.device().free_command_buffers(self.env.command_pool(), &self.buffers);
-            }
+            self.env.device().free_command_buffers(self.env.command_pool(), &self.buffers);
         }
     }
 }
