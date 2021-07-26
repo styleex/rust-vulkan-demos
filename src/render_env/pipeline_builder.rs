@@ -45,7 +45,6 @@ pub struct PipelineBuilder {
     rasterization: vk::PipelineRasterizationStateCreateInfo,
     multisampling: vk::PipelineMultisampleStateCreateInfo,
     depth_stencil: vk::PipelineDepthStencilStateCreateInfo,
-    color_blend: vk::PipelineColorBlendStateCreateInfo,
     color_blend_attachment_states: Vec<vk::PipelineColorBlendAttachmentState>,
 
     vertex_shader: Option<Shader>,
@@ -148,17 +147,6 @@ impl PipelineBuilder {
             }
         ];
 
-        let color_blend_state = vk::PipelineColorBlendStateCreateInfo {
-            s_type: vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::PipelineColorBlendStateCreateFlags::empty(),
-            logic_op_enable: vk::FALSE,
-            logic_op: vk::LogicOp::COPY,
-            attachment_count: 0,
-            p_attachments: ptr::null(),
-            blend_constants: [0.0, 0.0, 0.0, 0.0],
-        };
-
         PipelineBuilder {
             device,
 
@@ -175,7 +163,6 @@ impl PipelineBuilder {
             rasterization: rasterization_status_create_info,
             multisampling: multisample_state_create_info,
             depth_stencil: depth_state_create_info,
-            color_blend: color_blend_state,
             color_blend_attachment_states,
 
             vertex_shader: None,

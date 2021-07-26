@@ -215,7 +215,7 @@ impl FrameBuffer {
 }
 
 
-pub fn draw_to_framebuffer<F>(env: &RenderEnv, fb: &FrameBuffer, f: F) -> vk::CommandBuffer
+pub fn draw_to_framebuffer<F>(env: &RenderEnv, clear_color: [f32; 3], fb: &FrameBuffer, f: F) -> vk::CommandBuffer
     where
         F: Fn(vk::CommandBuffer)
 {
@@ -251,7 +251,7 @@ pub fn draw_to_framebuffer<F>(env: &RenderEnv, fb: &FrameBuffer, f: F) -> vk::Co
     let clear_values = [
         vk::ClearValue {
             color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
+                float32: [clear_color[0], clear_color[1], clear_color[2], 1.0],
             },
         },
         vk::ClearValue {

@@ -13,8 +13,8 @@ layout(push_constant) uniform PushConstants {
 
 void main() {
     gl_Position =vec4(
-        2.0 * inPos.x / 800.0 - 1.0, //pushConstants.screen_size.x - 1.0,
-        2.0 * inPos.y / 600.0 - 1.0, 0.0, 1.0 //pushConstants.screen_size.y - 1.0, 0.0, 1.0
+        2.0 * inPos.x / pushConstants.screen_size.x - 1.0,
+        2.0 * inPos.y / pushConstants.screen_size.y - 1.0, 0.0, 1.0
     );
     outColor = vec4(inColor);
     outUV = inUV;

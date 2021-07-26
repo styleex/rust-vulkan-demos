@@ -66,6 +66,10 @@ impl Camera {
         }
     }
 
+    pub fn mouse_acquired(&self) -> bool {
+        self.mouse_pressed
+    }
+
     pub fn handle_event(&mut self, event: &WindowEvent) {
         match event {
             &WindowEvent::KeyboardInput { input, .. } => {

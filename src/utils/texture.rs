@@ -8,6 +8,7 @@ use image::GenericImageView;
 
 use crate::utils::buffer_utils;
 
+#[allow(dead_code)]
 pub struct Texture {
     device: ash::Device,
     pub texture_image: vk::Image,
@@ -172,15 +173,15 @@ fn create_texture_image(
     }
 
 
-        generate_mipmaps(
-            device,
-            command_pool,
-            submit_queue,
-            texture_image,
-            image_width,
-            image_height,
-            mip_levels,
-        );
+    generate_mipmaps(
+        device,
+        command_pool,
+        submit_queue,
+        texture_image,
+        image_width,
+        image_height,
+        mip_levels,
+    );
 
     (texture_image, texture_image_memory, mip_levels)
 }
@@ -326,8 +327,8 @@ fn generate_mipmaps(
 pub fn check_mipmap_support(
     instance: &ash::Instance,
     physcial_device: vk::PhysicalDevice,
-    image_format: vk::Format,
-) {
+    image_format: vk::Format)
+{
     let format_properties = unsafe {
         instance.get_physical_device_format_properties(physcial_device, image_format)
     };

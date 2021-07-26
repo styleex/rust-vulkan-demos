@@ -11,6 +11,7 @@ use ash::vk::DescriptorSetLayoutBinding;
 use spirv_reflect::ShaderModule;
 use spirv_reflect::types::{ReflectDescriptorType, ReflectShaderStageFlags};
 
+
 pub trait SpecializationConstants {
     fn entry_map() -> Vec<vk::SpecializationMapEntry>;
 }
@@ -186,7 +187,7 @@ impl Shader {
             device: device.clone(),
             constants: None,
             spec_info: None,
-            push_constants_range: push_constants_range,
+            push_constants_range,
         }
     }
 

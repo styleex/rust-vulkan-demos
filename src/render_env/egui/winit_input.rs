@@ -1,6 +1,6 @@
-use winit::event::{WindowEvent, VirtualKeyCode, Event, ModifiersState};
-use egui::math::{vec2, pos2};
-use egui::Key;
+use egui::{Key, RawInput};
+use egui::math::{pos2, vec2};
+use winit::event::{ModifiersState, VirtualKeyCode, WindowEvent};
 
 pub(crate) struct WinitInput {
     scale_factor: f64,
@@ -11,118 +11,109 @@ pub(crate) struct WinitInput {
 }
 
 impl WinitInput {
-    pub fn new() -> WinitInput {
+    pub fn new(init_input: RawInput) -> WinitInput {
         WinitInput {
             scale_factor: 1.0,
-            raw_input: egui::RawInput::default(),
+            raw_input: init_input,
             mouse_pos: egui::Pos2::new(0.0, 0.0),
             modifiers_state: ModifiersState::default(),
         }
     }
 
-    pub fn handle_event<T>(&mut self, context: egui::CtxRef, winit_event: &Event<T>) {
-        match winit_event {
-            Event::WindowEvent {
-                window_id: _window_id,
-                event,
-            } => match event {
-                // window size changed
-                WindowEvent::Resized(physical_size) => {
-                    let pixels_per_point = self
-                        .raw_input
-                        .pixels_per_point
-                        .unwrap_or_else(|| context.pixels_per_point());
-                    self.raw_input.screen_rect = Some(egui::Rect::from_min_size(
-                        Default::default(),
-                        vec2(physical_size.width as f32, physical_size.height as f32)
-                            / pixels_per_point,
-                    ));
+    pub fn handle_event(&mut self, context: egui::CtxRef, window_event: &WindowEvent) {
+        match window_event {
+            // window size changed
+            WindowEvent::Resized(physical_size) => {
+                let pixels_per_point = self
+                    .raw_input
+                    .pixels_per_point
+                    .unwrap_or_else(|| context.pixels_per_point());
+                self.raw_input.screen_rect = Some(egui::Rect::from_min_size(
+                    Default::default(),
+                    vec2(physical_size.width as f32, physical_size.height as f32)
+                        / pixels_per_point,
+                ));
+            }
+            // dpi changed
+            WindowEvent::ScaleFactorChanged { scale_factor, new_inner_size } => {
+                self.scale_factor = *scale_factor;
+                self.raw_input.pixels_per_point = Some(*scale_factor as f32);
+                let pixels_per_point = self
+                    .raw_input
+                    .pixels_per_point
+                    .unwrap_or_else(|| context.pixels_per_point());
+                self.raw_input.screen_rect = Some(egui::Rect::from_min_size(
+                    Default::default(),
+                    vec2(new_inner_size.width as f32, new_inner_size.height as f32)
+                        / pixels_per_point,
+                ));
+            }
+            // mouse click
+            WindowEvent::MouseInput { state, button, .. } => {
+                if let Some(button) = winit_to_egui_mouse_button(*button) {
+                    self.raw_input.events.push(egui::Event::PointerButton {
+                        pos: self.mouse_pos,
+                        button,
+                        pressed: *state == winit::event::ElementState::Pressed,
+                        modifiers: winit_to_egui_modifiers(self.modifiers_state),
+                    });
                 }
-                // dpi changed
-                WindowEvent::ScaleFactorChanged {
-                    scale_factor,
-                    new_inner_size,
-                } => {
-                    self.scale_factor = *scale_factor;
-                    self.raw_input.pixels_per_point = Some(*scale_factor as f32);
-                    let pixels_per_point = self
-                        .raw_input
-                        .pixels_per_point
-                        .unwrap_or_else(|| context.pixels_per_point());
-                    self.raw_input.screen_rect = Some(egui::Rect::from_min_size(
-                        Default::default(),
-                        vec2(new_inner_size.width as f32, new_inner_size.height as f32)
-                            / pixels_per_point,
-                    ));
+            }
+            // mouse wheel
+            WindowEvent::MouseWheel { delta, .. } => match delta {
+                winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                    let line_height = 24.0;
+                    self.raw_input.scroll_delta = vec2(*x, *y) * line_height;
                 }
-                // mouse click
-                WindowEvent::MouseInput { state, button, .. } => {
-                    if let Some(button) = winit_to_egui_mouse_button(*button) {
-                        self.raw_input.events.push(egui::Event::PointerButton {
-                            pos: self.mouse_pos,
-                            button,
-                            pressed: *state == winit::event::ElementState::Pressed,
-                            modifiers: winit_to_egui_modifiers(self.modifiers_state),
-                        });
-                    }
+                winit::event::MouseScrollDelta::PixelDelta(delta) => {
+                    self.raw_input.scroll_delta = vec2(delta.x as f32, delta.y as f32);
                 }
-                // mouse wheel
-                WindowEvent::MouseWheel { delta, .. } => match delta {
-                    winit::event::MouseScrollDelta::LineDelta(x, y) => {
-                        let line_height = 24.0;
-                        self.raw_input.scroll_delta = vec2(*x, *y) * line_height;
-                    }
-                    winit::event::MouseScrollDelta::PixelDelta(delta) => {
-                        self.raw_input.scroll_delta = vec2(delta.x as f32, delta.y as f32);
-                    }
-                },
-                // mouse move
-                WindowEvent::CursorMoved { position, .. } => {
-                    let pixels_per_point = self
-                        .raw_input
-                        .pixels_per_point
-                        .unwrap_or_else(|| context.pixels_per_point());
-                    let pos = pos2(
-                        position.x as f32 / pixels_per_point,
-                        position.y as f32 / pixels_per_point,
-                    );
-                    self.raw_input.events.push(egui::Event::PointerMoved(pos));
-                    self.mouse_pos = pos;
-                }
-                // mouse out
-                WindowEvent::CursorLeft { .. } => {
-                    self.raw_input.events.push(egui::Event::PointerGone);
-                }
-                // modifier keys
-                WindowEvent::ModifiersChanged(input) => self.modifiers_state = *input,
-                // keyboard inputs
-                WindowEvent::KeyboardInput { input, .. } => {
-                    if let Some(virtual_keycode) = input.virtual_keycode {
-                        let pressed = input.state == winit::event::ElementState::Pressed;
-                        if pressed {
-                            if let Some(key) = winit_to_egui_key_code(virtual_keycode)
-                            {
-                                self.raw_input.events.push(egui::Event::Key {
-                                    key,
-                                    pressed: input.state == winit::event::ElementState::Pressed,
-                                    modifiers: winit_to_egui_modifiers(self.modifiers_state),
-                                })
-                            }
+            },
+            // mouse move
+            WindowEvent::CursorMoved { position, .. } => {
+                let pixels_per_point = self
+                    .raw_input
+                    .pixels_per_point
+                    .unwrap_or_else(|| context.pixels_per_point());
+                let pos = pos2(
+                    position.x as f32 / pixels_per_point,
+                    position.y as f32 / pixels_per_point,
+                );
+                self.raw_input.events.push(egui::Event::PointerMoved(pos));
+                self.mouse_pos = pos;
+            }
+            // mouse out
+            WindowEvent::CursorLeft { .. } => {
+                self.raw_input.events.push(egui::Event::PointerGone);
+            }
+            // modifier keys
+            WindowEvent::ModifiersChanged(input) => self.modifiers_state = *input,
+            // keyboard inputs
+            WindowEvent::KeyboardInput { input, .. } => {
+                if let Some(virtual_keycode) = input.virtual_keycode {
+                    let pressed = input.state == winit::event::ElementState::Pressed;
+                    if pressed {
+                        if let Some(key) = winit_to_egui_key_code(virtual_keycode)
+                        {
+                            self.raw_input.events.push(egui::Event::Key {
+                                key,
+                                pressed: input.state == winit::event::ElementState::Pressed,
+                                modifiers: winit_to_egui_modifiers(self.modifiers_state),
+                            })
                         }
                     }
                 }
-                // receive character
-                WindowEvent::ReceivedCharacter(ch) => {
-                    // remove control character
-                    if ch.is_ascii_control() {
-                        return;
-                    }
-                    self.raw_input
-                        .events
-                        .push(egui::Event::Text(ch.to_string()));
+            }
+            // receive character
+            WindowEvent::ReceivedCharacter(ch) => {
+                // remove control character
+                if ch.is_ascii_control() {
+                    return;
                 }
-                _ => (),
-            },
+                self.raw_input
+                    .events
+                    .push(egui::Event::Text(ch.to_string()));
+            }
             _ => (),
         }
     }
@@ -188,20 +179,20 @@ fn winit_to_egui_key_code(key: VirtualKeyCode) -> Option<egui::Key> {
 
 fn winit_to_egui_modifiers(modifiers: ModifiersState) -> egui::Modifiers {
     #[cfg(target_os = "macos")]
-    let mac_cmd = modifiers.logo();
+        let mac_cmd = modifiers.logo();
     #[cfg(target_os = "macos")]
-    let command = modifiers.logo();
+        let command = modifiers.logo();
     #[cfg(not(target_os = "macos"))]
-    let mac_cmd = false;
+        let mac_cmd = false;
     #[cfg(not(target_os = "macos"))]
-    let command = modifiers.ctrl();
+        let command = modifiers.ctrl();
 
     egui::Modifiers {
         alt: modifiers.alt(),
         ctrl: modifiers.ctrl(),
         shift: modifiers.shift(),
         mac_cmd,
-        command
+        command,
     }
 }
 

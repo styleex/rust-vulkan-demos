@@ -1,6 +1,5 @@
 use core::mem;
-use std::{ffi, ptr};
-
+use std::{ptr};
 use ash::version::DeviceV1_0;
 use ash::vk;
 

@@ -1,41 +1,100 @@
-use crate::render_env::egui::render::EguiRenderer;
-use egui::{InputState, RawInput};
 use std::sync::Arc;
-use crate::render_env::env::RenderEnv;
+use std::time::Instant;
+
 use ash::vk;
-use crate::render_env::egui::input::WinitInput;
-use winit::event::Event;
+use egui::math::vec2;
+use winit::event::{WindowEvent};
+
+pub use winit_input::egui_to_winit_cursor_icon;
+
+use crate::render_env::egui::renderer::EguiRenderer;
+use crate::render_env::egui::winit_input::WinitInput;
+use crate::render_env::env::RenderEnv;
 
 mod cpu_buffer;
-mod input;
-mod render;
-pub use input::egui_to_winit_cursor_icon;
+mod winit_input;
+mod renderer;
 
 pub struct Egui {
+    ctx: egui::CtxRef,
     renderer: EguiRenderer,
     winit_input: WinitInput,
+    current_cursor_icon: egui::CursorIcon,
+
+    start_time: Option<Instant>,
 }
 
 impl Egui {
-    pub fn new(env: Arc<RenderEnv>, ctx: egui::CtxRef, output_format: vk::Format) -> Egui {
-        let renderer = EguiRenderer::new(env, ctx, output_format);
-        let winit_input = WinitInput::new();
+    pub fn new(env: Arc<RenderEnv>, output_format: vk::Format, scale_factor: f64, dimensions: [u32; 2]) -> Egui {
+        let mut ctx = egui::CtxRef::default();
+
+        let raw_input = egui::RawInput {
+            pixels_per_point: Some(scale_factor as f32),
+            screen_rect: Some(egui::Rect::from_min_size(
+                Default::default(),
+                vec2(dimensions[0] as f32, dimensions[1] as f32) / scale_factor as f32,
+            )),
+            time: Some(0.0),
+            ..Default::default()
+        };
+
+        // Egui create internal font texture only after first `begin_frame` call
+        ctx.begin_frame(raw_input.clone());
+        let (_output, _shapes) = ctx.end_frame();
+
+        let renderer = EguiRenderer::new(env, ctx.clone(), output_format);
+        let winit_input = WinitInput::new(raw_input);
 
         Egui {
+            ctx,
             winit_input,
             renderer,
+            current_cursor_icon: egui::CursorIcon::None,
+            start_time: None,
         }
     }
 
-    pub fn render(&mut self, meshes: Vec<egui::ClippedMesh>, framebuffer: vk::Framebuffer, dimensions: [u32; 2], frames: usize) -> vk::CommandBuffer {
-        self.renderer.render(meshes, framebuffer, dimensions, frames)
+    pub fn handle_event(&mut self, window_event: &WindowEvent) {
+        self.winit_input.handle_event(self.ctx.clone(), window_event);
     }
 
-    pub fn handle_event<T>(&mut self, context: egui::CtxRef, winit_event: &Event<T>) {
-        self.winit_input.handle_event(context, winit_event);
+    pub fn begin_frame(&mut self) {
+        let mut raw_input = self.winit_input.raw_input.take();
+
+        if let Some(time) = self.start_time {
+            raw_input.time = Some(time.elapsed().as_secs_f64());
+        } else {
+            self.start_time = Some(Instant::now());
+        }
+
+        self.ctx.begin_frame(raw_input);
     }
 
-    pub fn raw_input(&self) -> RawInput {
-        self.winit_input.raw_input.clone()
+    pub fn end_frame(&mut self, wnd: &winit::window::Window, dimensions: [u32; 2], max_frames: usize) -> vk::CommandBuffer {
+        let (output, shapes) = self.ctx.end_frame();
+        if self.current_cursor_icon != output.cursor_icon {
+            if let Some(cursor_icon) = egui_to_winit_cursor_icon(output.cursor_icon) {
+                wnd.set_cursor_visible(true);
+                wnd.set_cursor_icon(cursor_icon);
+            } else {
+                wnd.set_cursor_visible(false);
+            }
+            self.current_cursor_icon = output.cursor_icon;
+        };
+
+        let clipped_meshes = self.ctx.tessellate(shapes);
+
+        let gui_render_op = self.renderer.render(
+            self.ctx.clone(),
+            clipped_meshes,
+            dimensions,
+            max_frames,
+        );
+
+        gui_render_op
+    }
+
+    pub fn context(&self) -> egui::CtxRef {
+        self.ctx.clone()
     }
 }

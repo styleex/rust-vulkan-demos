@@ -12,9 +12,10 @@ use utils::{commands, pipeline, render_pass,
             sync, uniform_buffer, vertex};
 
 use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder};
-use crate::render_env::egui::{Egui, egui_to_winit_cursor_icon};
+use crate::render_env::egui::Egui;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
+use crate::utils::quad_render::QuadRenderer;
 
 mod utils;
 mod camera;
@@ -24,8 +25,8 @@ mod render_env;
 
 struct HelloApplication {
     egui: Egui,
-    egui_ctx: egui::CtxRef,
 
+    quad_renderer: QuadRenderer,
     swapchain_stuff: render_env::swapchain::SwapChain,
 
     vertex_buffer: vertex::VertexBuffer,
@@ -47,12 +48,10 @@ struct HelloApplication {
     pipeline_second: pipeline_builder::Pipeline,
     descriptor_set_second: descriptors::DescriptorSet,
 
-    quad_pipeline: pipeline_builder::Pipeline,
     quad_render_pass: vk::RenderPass,
-    quad_descriptors: Vec<descriptors::DescriptorSet>,
-    draw_quad_primary_cmds: Vec<vk::CommandBuffer>,  // Per frame command buffers
-
     env: Arc<env::RenderEnv>,
+
+    clear_color: [f32; 3],
 }
 
 impl HelloApplication {
@@ -88,7 +87,7 @@ impl HelloApplication {
         );
 
         let dimensions = [swapchain_stuff.size.width, swapchain_stuff.size.height];
-        let mut framebuffer = frame_buffer::FrameBuffer::new(env.clone(), vec!(
+        let mut offscreen_framebuffer = frame_buffer::FrameBuffer::new(env.clone(), vec!(
             frame_buffer::AttachmentDesciption {
                 samples_count: msaa_samples,
                 format: vk::Format::R8G8B8A8_SRGB,
@@ -98,72 +97,39 @@ impl HelloApplication {
                 format: vk::Format::D32_SFLOAT,
             },
         ));
-        framebuffer.resize_swapchain(dimensions);
+        offscreen_framebuffer.resize_swapchain(dimensions);
 
-        let pipeline_second = pipeline::create_graphics_pipeline(
-            env.device().clone(), framebuffer.render_pass(), msaa_samples,
+        let draw_mesh_pipeline = pipeline::create_graphics_pipeline(
+            env.device().clone(), offscreen_framebuffer.render_pass(), msaa_samples,
         );
-        let descriptor_set_second = descriptors::DescriptorSetBuilder::new(
-            env.device(), pipeline_second.descriptor_set_layouts.get(0).unwrap())
+        let draw_mesh_descriptor_set = descriptors::DescriptorSetBuilder::new(
+            env.device(), draw_mesh_pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_buffer(uniform_buffers.uniform_buffers[0])
             .add_image(texture.texture_image_view, texture.texture_sampler)
             .build();
 
-        let second_buffer = commands::create_second_command_buffers(
+        let draw_mesh_cmd = commands::create_second_command_buffers(
             env.device(),
             env.command_pool(),
-            pipeline_second.graphics_pipeline,
-            framebuffer.render_pass(),
+            draw_mesh_pipeline.graphics_pipeline,
+            offscreen_framebuffer.render_pass(),
             swapchain_stuff.size,
             vertex_buffer.vertex_buffer,
             vertex_buffer.index_buffer,
             vertex_buffer.index_count,
-            pipeline_second.pipeline_layout,
-            descriptor_set_second.set,
-        );
-
-        let quad_pipeline = pipeline::create_quad_graphics_pipeline(
-            env.device().clone(), quad_render_pass, msaa_samples,
-        );
-
-        let mut quad_descriptors = Vec::new();
-        for _ in swapchain_stuff.image_views.iter() {
-            quad_descriptors.push(
-                descriptors::DescriptorSetBuilder::new(
-                    env.device(), quad_pipeline.descriptor_set_layouts.get(0).unwrap())
-                    .add_image(framebuffer.attachments.get(0).unwrap().view, texture.texture_sampler)
-                    .build()
-            );
-        }
-
-        let quad_command_buffers = commands::create_quad_command_buffers(
-            env.device(),
-            env.command_pool(),
-            quad_pipeline.graphics_pipeline,
-            &swapchain_stuff.framebuffers,
-            quad_render_pass,
-            swapchain_stuff.size,
-            quad_pipeline.pipeline_layout,
-            quad_descriptors.iter().map(|x| x.set).collect(),
+            draw_mesh_pipeline.pipeline_layout,
+            draw_mesh_descriptor_set.set,
         );
 
         println!("created");
 
+        let quad_renderer = QuadRenderer::new(env.clone(), &offscreen_framebuffer, quad_render_pass, msaa_samples, dimensions);
         let sync = sync::create_sync_objects(env.device());
 
-        let mut egui_ctx = egui::CtxRef::default();
-        let mut init_input = egui::RawInput::default();
-        init_input.pixels_per_point = Some(wnd.scale_factor() as f32);
-
-        egui_ctx.begin_frame(init_input);
-        let (_output, _shapes) = egui_ctx.end_frame();
-
-        println!("{}", wnd.scale_factor());
-
-        let egui_renderer = Egui::new(env.clone(), egui_ctx.clone(), swapchain_stuff.format);
+        let egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions);
         HelloApplication {
             env,
-
+            quad_renderer,
             swapchain_stuff,
 
             vertex_buffer,
@@ -177,19 +143,16 @@ impl HelloApplication {
             msaa_samples,
             camera,
 
-            framebuffer,
-            draw_mesh_second_cmd: second_buffer,
+            framebuffer: offscreen_framebuffer,
+            draw_mesh_second_cmd: draw_mesh_cmd,
             geometry_pass_cmds: [vk::CommandBuffer::null(), vk::CommandBuffer::null()],
-            pipeline_second,
-            descriptor_set_second,
+            pipeline_second: draw_mesh_pipeline,
+            descriptor_set_second: draw_mesh_descriptor_set,
 
+            egui,
+
+            clear_color: [0.0, 0.0, 0.0],
             quad_render_pass,
-            quad_pipeline,
-            quad_descriptors,
-
-            draw_quad_primary_cmds: quad_command_buffers,
-            egui_ctx,
-            egui: egui_renderer,
         }
     }
 
@@ -198,8 +161,6 @@ impl HelloApplication {
 
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
-
-            self.egui.handle_event(self.egui_ctx.clone(), &event);
 
             match event {
                 Event::WindowEvent { event, window_id } => {
@@ -223,7 +184,13 @@ impl HelloApplication {
                         self.is_window_resized = true;
                     }
 
-                    self.camera.handle_event(&event);
+                    if !self.egui.context().is_pointer_over_area() {
+                        self.camera.handle_event(&event);
+                    }
+
+                    if !self.camera.mouse_acquired() {
+                        self.egui.handle_event(&event);
+                    }
                 }
                 Event::MainEventsCleared => {
                     wnd.request_redraw()
@@ -276,11 +243,10 @@ impl HelloApplication {
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let first_pass_finished = [self.sync.render_finished_semaphores[self.current_frame]];
         let second_pass_finished = [self.sync.render_quad_semaphore];
-        let gui_finished = [self.sync.render_gui_semaphore];
 
 
         let geometry_pass_cmd = frame_buffer::draw_to_framebuffer(
-            &self.env, &self.framebuffer,
+            &self.env, self.clear_color, &self.framebuffer,
             |cmd| {
                 unsafe {
                     self.env.device().cmd_execute_commands(cmd, &[self.draw_mesh_second_cmd]);
@@ -294,28 +260,28 @@ impl HelloApplication {
         }
         self.geometry_pass_cmds[self.current_frame] = geometry_pass_cmd;
 
-        self.egui_ctx.set_visuals(egui::style::Visuals::dark());
-        self.egui_ctx.begin_frame(self.egui.raw_input());
-            egui::SidePanel::left("my_side_panel").frame(egui::Frame{
-                margin: Default::default(),
-                corner_radius: 0.0,
-                shadow: Default::default(),
-                fill: egui::Color32::TRANSPARENT,
-                stroke: Default::default()
-            }).show(&self.egui_ctx, |ui| {
-                ui.heading("Hello");
-                ui.checkbox(&mut true, "example");
-            });
+        self.egui.begin_frame();
 
-        let (output, shapes) = self.egui_ctx.end_frame();
-        let clipped_meshes = self.egui_ctx.tessellate(shapes);
-        let gui_render_op = self.egui.render(
-            clipped_meshes,
-            self.swapchain_stuff.framebuffers[image_index as usize],
+        egui::SidePanel::left("my_side_panel").show(&self.egui.context(), |ui| {
+            ui.heading("Hello");
+            ui.separator();
+
+            // let mut rgb: [f32; 3] = [0.0, 0.0, 0.0];
+            ui.color_edit_button_rgb(&mut self.clear_color);
+        });
+
+        let gui_render_op = self.egui.end_frame(
+            wnd,
             [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height],
             MAX_FRAMES_IN_FLIGHT,
         );
-        wnd.set_cursor_icon(egui_to_winit_cursor_icon(output.cursor_icon).unwrap());
+
+        let quad_cmd_buf = self.quad_renderer.render(
+            [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height],
+            self.swapchain_stuff.framebuffers[image_index as usize],
+            vec![gui_render_op],
+            MAX_FRAMES_IN_FLIGHT,
+        );
 
         let submit_infos = [
             vk::SubmitInfo {
@@ -336,21 +302,10 @@ impl HelloApplication {
                 p_wait_semaphores: first_pass_finished.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [self.draw_quad_primary_cmds[image_index as usize]].as_ptr(),
+                p_command_buffers: [quad_cmd_buf].as_ptr(),
                 signal_semaphore_count: second_pass_finished.len() as u32,
                 p_signal_semaphores: second_pass_finished.as_ptr(),
             },
-            vk::SubmitInfo {
-                s_type: vk::StructureType::SUBMIT_INFO,
-                p_next: ptr::null(),
-                wait_semaphore_count: second_pass_finished.len() as u32,
-                p_wait_semaphores: second_pass_finished.as_ptr(),
-                p_wait_dst_stage_mask: wait_stages.as_ptr(),
-                command_buffer_count: 1,
-                p_command_buffers: [gui_render_op].as_ptr(),
-                signal_semaphore_count: gui_finished.len() as u32,
-                p_signal_semaphores: gui_finished.as_ptr(),
-            }
         ];
 
         unsafe {
@@ -372,7 +327,7 @@ impl HelloApplication {
             s_type: vk::StructureType::PRESENT_INFO_KHR,
             p_next: ptr::null(),
             wait_semaphore_count: 1,
-            p_wait_semaphores: gui_finished.as_ptr(),
+            p_wait_semaphores: second_pass_finished.as_ptr(),
             swapchain_count: 1,
             p_swapchains: swapchains.as_ptr(),
             p_image_indices: &image_index,
@@ -413,30 +368,7 @@ impl HelloApplication {
 
         let dimensions = [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height];
         self.framebuffer.resize_swapchain(dimensions);
-
-        let mut quad_descriptors = Vec::new();
-        for _img_view in self.swapchain_stuff.image_views.iter() {
-            quad_descriptors.push(
-                descriptors::DescriptorSetBuilder::new(
-                    self.env.device(),
-                    self.quad_pipeline.descriptor_set_layouts.get(0).unwrap(),
-                )
-                    .add_image(self.framebuffer.attachments.get(0).unwrap().view, self.texture.texture_sampler)
-                    .build()
-            );
-        };
-        self.quad_descriptors = quad_descriptors;
-
-        self.draw_quad_primary_cmds = commands::create_quad_command_buffers(
-            &self.env.device(),
-            self.env.command_pool(),
-            self.quad_pipeline.graphics_pipeline,
-            &self.swapchain_stuff.framebuffers,
-            self.quad_render_pass,
-            self.swapchain_stuff.size,
-            self.quad_pipeline.pipeline_layout,
-            self.quad_descriptors.iter().map(|x| x.set).collect(),
-        );
+        self.quad_renderer.update_framebuffer(&self.framebuffer, dimensions);
 
 
         self.draw_mesh_second_cmd = commands::create_second_command_buffers(
@@ -455,7 +387,6 @@ impl HelloApplication {
 
     fn cleanup_swapchain(&mut self) {
         self.swapchain_stuff.destroy();
-        self.quad_descriptors.clear();
     }
 }
 

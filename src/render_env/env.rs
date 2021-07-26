@@ -208,7 +208,21 @@ impl RenderEnv {
             p_next: ptr::null(),
             command_pool: self.command_pool,
             level: vk::CommandBufferLevel::PRIMARY,
-            command_buffer_count: 1
+            command_buffer_count: 1,
+        };
+
+        unsafe {
+            self.device.allocate_command_buffers(&create_info).unwrap().pop().unwrap()
+        }
+    }
+
+    pub fn create_secondary_command_buffer(&self) -> vk::CommandBuffer {
+        let create_info = vk::CommandBufferAllocateInfo {
+            s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
+            p_next: ptr::null(),
+            command_pool: self.command_pool,
+            level: vk::CommandBufferLevel::SECONDARY,
+            command_buffer_count: 1,
         };
 
         unsafe {

@@ -3,7 +3,6 @@ use std::ptr;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-
 pub fn create_quad_render_pass(
     device: &ash::Device, surface_format: vk::Format) -> vk::RenderPass {
     let color_attachment = vk::AttachmentDescription {
@@ -15,7 +14,7 @@ pub fn create_quad_render_pass(
         stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
         stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
         initial_layout: vk::ImageLayout::UNDEFINED,
-        final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
     };
 
     let color_attachment_ref = vk::AttachmentReference {
@@ -23,18 +22,20 @@ pub fn create_quad_render_pass(
         layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
     };
 
-    let subpasses = [vk::SubpassDescription {
-        color_attachment_count: 1,
-        p_color_attachments: &color_attachment_ref,
-        p_depth_stencil_attachment: ptr::null(),
-        flags: vk::SubpassDescriptionFlags::empty(),
-        pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
-        input_attachment_count: 0,
-        p_input_attachments: ptr::null(),
-        p_resolve_attachments: ptr::null(),
-        preserve_attachment_count: 0,
-        p_preserve_attachments: ptr::null(),
-    }];
+    let subpasses = [
+        vk::SubpassDescription {
+            color_attachment_count: 1,
+            p_color_attachments: &color_attachment_ref,
+            p_depth_stencil_attachment: ptr::null(),
+            flags: vk::SubpassDescriptionFlags::empty(),
+            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+            input_attachment_count: 0,
+            p_input_attachments: ptr::null(),
+            p_resolve_attachments: ptr::null(),
+            preserve_attachment_count: 0,
+            p_preserve_attachments: ptr::null(),
+        }
+    ];
 
     let render_pass_attachments = [color_attachment];
 
