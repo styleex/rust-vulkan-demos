@@ -143,8 +143,10 @@ impl HelloApplication {
         let egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions);
 
 
-        let draw_mesh_render_system = RenderSystem::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
-        let quad_render_system = RenderSystem::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+        let mut draw_mesh_render_system = RenderSystem::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+        draw_mesh_render_system.set_dimensions(dimensions);
+        let mut quad_render_system = RenderSystem::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+        quad_render_system.set_dimensions(dimensions);
         HelloApplication {
             env,
             final_frame: quad_render_system,

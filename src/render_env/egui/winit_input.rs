@@ -3,7 +3,7 @@ use egui::math::{pos2, vec2};
 use winit::event::{ModifiersState, VirtualKeyCode, WindowEvent};
 
 pub(crate) struct WinitInput {
-    scale_factor: f64,
+    pub scale_factor: f64,
     pub(super) raw_input: egui::RawInput,
 
     mouse_pos: egui::Pos2,
@@ -11,9 +11,9 @@ pub(crate) struct WinitInput {
 }
 
 impl WinitInput {
-    pub fn new(init_input: RawInput) -> WinitInput {
+    pub fn new(init_input: RawInput, scale_factor: f64) -> WinitInput {
         WinitInput {
-            scale_factor: 1.0,
+            scale_factor: scale_factor,
             raw_input: init_input,
             mouse_pos: egui::Pos2::new(0.0, 0.0),
             modifiers_state: ModifiersState::default(),

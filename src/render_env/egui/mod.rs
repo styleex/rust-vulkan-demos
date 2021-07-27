@@ -43,7 +43,7 @@ impl Egui {
         let (_output, _shapes) = ctx.end_frame();
 
         let renderer = EguiRenderer::new(env, ctx.clone(), output_format);
-        let winit_input = WinitInput::new(raw_input);
+        let winit_input = WinitInput::new(raw_input, scale_factor);
 
         Egui {
             ctx,
@@ -89,6 +89,7 @@ impl Egui {
             clipped_meshes,
             dimensions,
             max_frames,
+            self.winit_input.scale_factor as f32,
         );
 
         gui_render_op

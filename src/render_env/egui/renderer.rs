@@ -133,7 +133,7 @@ impl EguiRenderer {
         }
     }
 
-    pub fn render(&mut self, ctx: egui::CtxRef, meshes: Vec<egui::ClippedMesh>, dimensions: [u32; 2], frames: usize) -> vk::CommandBuffer {
+    pub fn render(&mut self, ctx: egui::CtxRef, meshes: Vec<egui::ClippedMesh>, dimensions: [u32; 2], frames: usize, scale_factor: f32) -> vk::CommandBuffer {
         if self.render_ops.len() > frames {
             self.render_ops.remove(0);
         }
@@ -187,8 +187,8 @@ impl EguiRenderer {
         }];
 
         let mut data = Vec::new();
-        data.extend((dimensions[0] as f32).to_le_bytes());
-        data.extend((dimensions[1] as f32).to_le_bytes());
+        data.extend((dimensions[0] as f32 / scale_factor).to_le_bytes());
+        data.extend((dimensions[1] as f32 / scale_factor).to_le_bytes());
 
         unsafe {
             device.begin_command_buffer(cmd_buf, &begin_info).unwrap();
@@ -210,7 +210,6 @@ impl EguiRenderer {
             let mut vertex_base = 0;
             for egui::ClippedMesh(rect, mesh) in meshes.iter() {
                 let min = rect.min;
-                let scale_factor = 1.0;
 
                 let min = egui::Pos2 {
                     x: min.x * scale_factor as f32,
