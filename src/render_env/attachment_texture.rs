@@ -114,8 +114,10 @@ impl AttachmentImage {
             format,
         }
     }
+}
 
-    pub fn destroy(&self) {
+impl Drop for AttachmentImage {
+    fn drop(&mut self) {
         unsafe {
             self.device.destroy_image_view(self.view, None);
             self.device.destroy_image(self.image, None);

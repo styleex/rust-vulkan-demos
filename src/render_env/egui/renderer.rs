@@ -4,7 +4,7 @@ use std::sync::Arc;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-use crate::render_env::descriptors::{DescriptorSet, DescriptorSetBuilder};
+use crate::render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
 use crate::render_env::egui::cpu_buffer::CpuBuffer;
 use crate::render_env::env::RenderEnv;
 use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};

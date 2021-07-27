@@ -11,7 +11,7 @@ pub mod env;
 pub mod swapchain;
 
 pub mod shader;
-pub mod descriptors;
+pub mod descriptor_set;
 mod platforms;
 pub mod frame_buffer;
 pub mod pipeline_builder;

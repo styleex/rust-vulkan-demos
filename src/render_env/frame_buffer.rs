@@ -16,13 +16,14 @@ pub struct AttachmentDesciption {
 }
 
 pub struct Framebuffer {
-    env: Arc<env::RenderEnv>,
     attachment_desc: Vec<AttachmentDesciption>,
     pub render_pass: vk::RenderPass,
 
     pub framebuffer: Option<vk::Framebuffer>,
     pub attachments: Vec<AttachmentImage>,
     dimensions: [u32; 2],
+
+    env: Arc<env::RenderEnv>,
 }
 
 impl Framebuffer {
@@ -139,9 +140,7 @@ impl Framebuffer {
     }
 
     pub fn resize_swapchain(&mut self, dimensions: [u32; 2]) {
-        for img in self.attachments.iter() {
-            img.destroy();
-        }
+        self.attachments.clear();
         if self.framebuffer.is_some() {
             unsafe {
                 self.env.device().destroy_framebuffer(self.framebuffer.unwrap(), None)
@@ -199,10 +198,6 @@ impl Framebuffer {
             if self.framebuffer.is_some() {
                 self.env.device().destroy_framebuffer(self.framebuffer.unwrap(), None);
             };
-
-            for img in self.attachments.iter() {
-                img.destroy();
-            }
 
             self.env.device().destroy_render_pass(self.render_pass, None);
         }

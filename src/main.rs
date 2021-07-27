@@ -11,7 +11,7 @@ use winit::platform::run_return::EventLoopExtRunReturn;
 use utils::{commands, render_pass,
             sync, uniform_buffer, vertex};
 
-use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder, shader};
+use crate::render_env::{descriptor_set, env, frame_buffer, pipeline_builder, shader};
 use crate::render_env::egui::Egui;
 use crate::render_env::frame_render_system::RenderSystem;
 use crate::utils::quad_render::QuadRenderer;
@@ -51,7 +51,7 @@ struct HelloApplication {
 
     draw_mesh_second_cmd: vk::CommandBuffer,
     draw_mesh_pipeline: pipeline_builder::Pipeline,
-    draw_mesh_descriptor_set: descriptors::DescriptorSet,
+    draw_mesh_descriptor_set: descriptor_set::DescriptorSet,
 
     final_render_pass: vk::RenderPass,
     env: Arc<env::RenderEnv>,
@@ -116,7 +116,7 @@ impl HelloApplication {
                 .with_depth_test()
                 .build()
         };
-        let draw_mesh_descriptor_set = descriptors::DescriptorSetBuilder::new(
+        let draw_mesh_descriptor_set = descriptor_set::DescriptorSetBuilder::new(
             env.device(), draw_mesh_pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_buffer(uniform_buffers.uniform_buffers[0])
             .add_image(texture.texture_image_view, texture.texture_sampler)
