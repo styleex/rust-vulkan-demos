@@ -16,3 +16,4 @@ mod platforms;
 pub mod frame_buffer;
 pub mod pipeline_builder;
 pub mod egui;
+pub mod frame_render_system;

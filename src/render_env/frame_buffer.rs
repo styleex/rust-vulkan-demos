@@ -6,9 +6,8 @@ use ash::vk;
 
 use crate::render_env::attachment_texture::AttachmentImage;
 use crate::render_env::env;
-use crate::render_env::env::RenderEnv;
 use crate::render_env::utils::format_has_depth;
-use ash::vk::RenderPass;
+
 
 #[derive(Clone)]
 pub struct AttachmentDesciption {
@@ -19,9 +18,9 @@ pub struct AttachmentDesciption {
 pub struct Framebuffer {
     env: Arc<env::RenderEnv>,
     attachment_desc: Vec<AttachmentDesciption>,
-    render_pass: vk::RenderPass,
+    pub render_pass: vk::RenderPass,
 
-    framebuffer: Option<vk::Framebuffer>,
+    pub framebuffer: Option<vk::Framebuffer>,
     pub attachments: Vec<AttachmentImage>,
     dimensions: [u32; 2],
 }
@@ -213,109 +212,4 @@ impl Framebuffer {
     pub fn render_pass(&self) -> vk::RenderPass {
         self.render_pass
     }
-}
-
-pub trait AbstractFrameBuffer {
-    fn render_pass(&self) -> vk::RenderPass;
-    fn framebuffer(&self) -> vk::Framebuffer;
-    fn dimensions(&self) -> [u32; 2];
-}
-
-
-impl AbstractFrameBuffer for Framebuffer {
-    fn render_pass(&self) -> RenderPass {
-        self.render_pass
-    }
-
-    fn framebuffer(&self) -> vk::Framebuffer {
-        self.framebuffer.unwrap()
-    }
-
-    fn dimensions(&self) -> [u32; 2] {
-        self.dimensions
-    }
-}
-
-
-pub fn draw_to_framebuffer<B, F>(env: &RenderEnv, clear_color: [f32; 3], fb: &B, draw_f: F) -> vk::CommandBuffer
-    where
-        B: AbstractFrameBuffer,
-        F: Fn(vk::CommandBuffer)
-{
-    let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
-        s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
-        p_next: ptr::null(),
-        command_buffer_count: 1,
-        command_pool: env.command_pool,
-        level: vk::CommandBufferLevel::PRIMARY,
-    };
-
-    let command_buffer = unsafe {
-        env.device()
-            .allocate_command_buffers(&command_buffer_allocate_info)
-            .expect("Failed to allocate Command Buffers!")
-            .pop()
-            .unwrap()
-    };
-
-    let command_buffer_begin_info = vk::CommandBufferBeginInfo {
-        s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-        p_next: ptr::null(),
-        p_inheritance_info: ptr::null(),
-        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-    };
-
-    unsafe {
-        env.device()
-            .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-            .expect("Failed to begin recording Command Buffer at beginning!");
-    }
-
-    let clear_values = [
-        vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [clear_color[0], clear_color[1], clear_color[2], 1.0],
-            },
-        },
-        vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
-                stencil: 0,
-            }
-        },
-    ];
-
-    let render_pass_begin_info = vk::RenderPassBeginInfo {
-        s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
-        p_next: ptr::null(),
-        render_pass: fb.render_pass(),
-        framebuffer: fb.framebuffer(),
-        render_area: vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: vk::Extent2D {
-                width: fb.dimensions()[0],
-                height: fb.dimensions()[1],
-            },
-        },
-        clear_value_count: clear_values.len() as u32,
-        p_clear_values: clear_values.as_ptr(),
-    };
-
-    unsafe {
-        env.device().cmd_begin_render_pass(
-            command_buffer,
-            &render_pass_begin_info,
-            vk::SubpassContents::SECONDARY_COMMAND_BUFFERS,
-        );
-
-        draw_f(command_buffer);
-
-        env.device().cmd_end_render_pass(command_buffer);
-
-        env.device()
-            .end_command_buffer(command_buffer)
-            .expect("Failed to record Command Buffer at Ending!");
-    }
-
-    command_buffer
 }

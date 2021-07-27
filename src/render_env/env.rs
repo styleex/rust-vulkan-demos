@@ -174,8 +174,8 @@ impl RenderEnv {
             let command_pool_create_info = vk::CommandPoolCreateInfo {
                 s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
                 p_next: ptr::null(),
-                flags: vk::CommandPoolCreateFlags::empty(),
-                queue_family_index: queue_family_index,
+                flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
+                queue_family_index,
             };
 
             let command_pool = device

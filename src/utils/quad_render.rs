@@ -14,12 +14,9 @@ pub struct QuadRenderer {
     sampler: vk::Sampler,
     descriptor_set: descriptors::DescriptorSet,
     pipeline: pipeline_builder::Pipeline,
-    render_pass: vk::RenderPass,
-
-    second_buffer: vk::CommandBuffer,
+    pub render_pass: vk::RenderPass,
+    pub second_buffer: vk::CommandBuffer,
     env: Arc<RenderEnv>,
-
-    buffers: Vec<vk::CommandBuffer>,
 }
 
 impl QuadRenderer {
@@ -63,7 +60,6 @@ impl QuadRenderer {
             descriptor_set,
             second_buffer,
             env: env.clone(),
-            buffers: vec![],
         }
     }
 
@@ -148,106 +144,6 @@ impl QuadRenderer {
         cmd_buf
     }
 
-    pub fn render(&mut self, dimensions: [u32; 2], framebuffer: vk::Framebuffer, second_buffers: Vec<vk::CommandBuffer>, max_frames: usize) -> vk::CommandBuffer {
-        let device = self.env.device();
-
-        if self.buffers.len() > max_frames {
-            let buf = [self.buffers.remove(0)];
-
-            unsafe {
-                device.free_command_buffers(self.env.command_pool(), &buf);
-            }
-        }
-
-        let command_buffer = self.env.create_primary_command_buffer();
-
-        let command_buffer_begin_info = vk::CommandBufferBeginInfo {
-            s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
-            p_next: ptr::null(),
-            p_inheritance_info: ptr::null(),
-            flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-        };
-
-        unsafe {
-            device
-                .begin_command_buffer(command_buffer, &command_buffer_begin_info)
-                .expect("Failed to begin recording Command Buffer at beginning!");
-        }
-
-        let clear_values = [
-            vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 1.0],
-                },
-            },
-            vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                }
-            },
-        ];
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo {
-            s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
-            p_next: ptr::null(),
-            render_pass: self.render_pass,
-            framebuffer,
-            render_area: vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent: vk::Extent2D {
-                    width: dimensions[0],
-                    height: dimensions[1],
-                },
-            },
-            clear_value_count: clear_values.len() as u32,
-            p_clear_values: clear_values.as_ptr(),
-        };
-
-        let viewports = [vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: dimensions[0] as f32,
-            height: dimensions[1] as f32,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
-
-        let scissors = [vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: vk::Extent2D {
-                width: dimensions[0],
-                height: dimensions[1],
-            },
-        }];
-        unsafe {
-            device.cmd_set_viewport(command_buffer, 0, viewports.as_ref());
-            device.cmd_set_scissor(command_buffer, 0, scissors.as_ref());
-
-            device.cmd_begin_render_pass(
-                command_buffer,
-                &render_pass_begin_info,
-                vk::SubpassContents::SECONDARY_COMMAND_BUFFERS,
-            );
-
-            let mut buffers = vec![
-                self.second_buffer,
-            ];
-            buffers.extend(second_buffers);
-
-            device.cmd_execute_commands(command_buffer, &buffers);
-            device.cmd_end_render_pass(command_buffer);
-
-            device
-                .end_command_buffer(command_buffer)
-                .expect("Failed to record Command Buffer at Ending!");
-        };
-
-        self.buffers.push(command_buffer.clone());
-
-        command_buffer
-    }
-
     pub fn update_framebuffer(&mut self, framebuffer: &Framebuffer, dimensions: [u32; 2]) {
         self.descriptor_set = DescriptorSetBuilder::new(
             self.env.device(), self.pipeline.descriptor_set_layouts.get(0).unwrap())
@@ -262,7 +158,6 @@ impl Drop for QuadRenderer {
     fn drop(&mut self) {
         unsafe {
             self.env.device().destroy_sampler(self.sampler, None);
-            self.env.device().free_command_buffers(self.env.command_pool(), &self.buffers);
         }
     }
 }

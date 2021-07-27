@@ -8,14 +8,16 @@ use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
-use utils::{commands, pipeline, render_pass,
+use utils::{commands, render_pass,
             sync, uniform_buffer, vertex};
 
-use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder};
+use crate::render_env::{descriptors, env, frame_buffer, pipeline_builder, shader};
 use crate::render_env::egui::Egui;
+use crate::render_env::frame_render_system::RenderSystem;
+use crate::utils::quad_render::QuadRenderer;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::texture;
-use crate::utils::quad_render::QuadRenderer;
+use crate::render_env::pipeline_builder::PipelineBuilder;
 
 mod utils;
 mod camera;
@@ -25,6 +27,10 @@ mod render_env;
 
 struct HelloApplication {
     egui: Egui,
+
+    // TODO: Rename RenderSystem to RenderPass??
+    final_frame: RenderSystem,
+    geometry_frame: RenderSystem,
 
     quad_renderer: QuadRenderer,
     swapchain_stuff: render_env::swapchain::SwapChain,
@@ -44,7 +50,6 @@ struct HelloApplication {
     framebuffer: frame_buffer::Framebuffer,
 
     draw_mesh_second_cmd: vk::CommandBuffer,
-    draw_mesh_commands: [vk::CommandBuffer; MAX_FRAMES_IN_FLIGHT],
     draw_mesh_pipeline: pipeline_builder::Pipeline,
     draw_mesh_descriptor_set: descriptors::DescriptorSet,
 
@@ -99,9 +104,18 @@ impl HelloApplication {
         ));
         offscreen_framebuffer.resize_swapchain(dimensions);
 
-        let draw_mesh_pipeline = pipeline::create_graphics_pipeline(
-            env.device().clone(), offscreen_framebuffer.render_pass(), msaa_samples,
-        );
+        let draw_mesh_pipeline = {
+            let vert_shader_module = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.vert.spv");
+            let frag_shader_module = shader::Shader::load(env.device(), "shaders/spv/09-shader-base.frag.spv");
+
+            PipelineBuilder::new(env.device().clone(), offscreen_framebuffer.render_pass, 0)
+                .vertex_shader(vert_shader_module)
+                .fragment_shader(frag_shader_module)
+                .vertex_input(vertex::Vertex::get_binding_descriptions(), vertex::Vertex::get_attribute_descriptions())
+                .msaa(msaa_samples)
+                .with_depth_test()
+                .build()
+        };
         let draw_mesh_descriptor_set = descriptors::DescriptorSetBuilder::new(
             env.device(), draw_mesh_pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_buffer(uniform_buffers.uniform_buffers[0])
@@ -127,8 +141,14 @@ impl HelloApplication {
         let sync = sync::create_sync_objects(env.device());
 
         let egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions);
+
+
+        let draw_mesh_render_system = RenderSystem::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+        let quad_render_system = RenderSystem::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
         HelloApplication {
             env,
+            final_frame: quad_render_system,
+            geometry_frame: draw_mesh_render_system,
             quad_renderer,
             swapchain_stuff,
 
@@ -145,9 +165,8 @@ impl HelloApplication {
 
             framebuffer: offscreen_framebuffer,
             draw_mesh_second_cmd: draw_mesh_cmd,
-            draw_mesh_commands: [vk::CommandBuffer::null(), vk::CommandBuffer::null()],
-            draw_mesh_pipeline: draw_mesh_pipeline,
-            draw_mesh_descriptor_set: draw_mesh_descriptor_set,
+            draw_mesh_pipeline,
+            draw_mesh_descriptor_set,
 
             egui,
 
@@ -244,43 +263,42 @@ impl HelloApplication {
         let first_pass_finished = [self.sync.render_finished_semaphores[self.current_frame]];
         let second_pass_finished = [self.sync.render_quad_semaphore];
 
-
-        let geometry_pass_cmd = frame_buffer::draw_to_framebuffer(
-            &self.env, self.clear_color, &self.framebuffer,
-            |cmd| {
-                unsafe {
-                    self.env.device().cmd_execute_commands(cmd, &[self.draw_mesh_second_cmd]);
+        let clear_values = vec![
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [self.clear_color[0], self.clear_color[1], self.clear_color[2], 1.0],
+                },
+            },
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
                 }
-            });
+            },
+        ];
 
-        unsafe {
-            if self.draw_mesh_commands[self.current_frame] != vk::CommandBuffer::null() {
-                self.env.device().free_command_buffers(self.env.command_pool(), &[self.draw_mesh_commands[self.current_frame]]);
-            }
-        }
-        self.draw_mesh_commands[self.current_frame] = geometry_pass_cmd;
+        let geometry_pass_cmd = self.geometry_frame.frame(clear_values, self.framebuffer.framebuffer.unwrap(), self.framebuffer.render_pass, &[self.draw_mesh_second_cmd]);
 
         self.egui.begin_frame();
-
-        egui::SidePanel::left("my_side_panel").show(&self.egui.context(), |ui| {
-            ui.heading("Hello");
-            ui.separator();
-
-            // let mut rgb: [f32; 3] = [0.0, 0.0, 0.0];
-            ui.color_edit_button_rgb(&mut self.clear_color);
-        });
-
+        self.render_gui();
         let gui_render_op = self.egui.end_frame(
             wnd,
             [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height],
             MAX_FRAMES_IN_FLIGHT,
         );
 
-        let quad_cmd_buf = self.quad_renderer.render(
-            [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height],
+        let clear_values = vec![
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [self.clear_color[0], self.clear_color[1], self.clear_color[2], 1.0],
+                },
+            },
+        ];
+        let quad_cmd_buf = self.final_frame.frame(
+            clear_values,
             self.swapchain_stuff.framebuffers[image_index as usize],
-            vec![gui_render_op],
-            MAX_FRAMES_IN_FLIGHT,
+            self.quad_renderer.render_pass,
+            &[self.quad_renderer.second_buffer, gui_render_op],
         );
 
         let submit_infos = [
@@ -291,7 +309,7 @@ impl HelloApplication {
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [self.draw_mesh_commands[self.current_frame]].as_ptr(),
+                p_command_buffers: [geometry_pass_cmd].as_ptr(),
                 signal_semaphore_count: first_pass_finished.len() as u32,
                 p_signal_semaphores: first_pass_finished.as_ptr(),
             },
@@ -355,6 +373,16 @@ impl HelloApplication {
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
+    fn render_gui(&mut self) {
+        egui::SidePanel::left("my_side_panel").show(&self.egui.context(), |ui| {
+            ui.heading("Hello");
+            ui.separator();
+
+            // let mut rgb: [f32; 3] = [0.0, 0.0, 0.0];
+            ui.color_edit_button_rgb(&mut self.clear_color);
+        });
+    }
+
     fn recreate_swapchain(&mut self, wnd: &winit::window::Window) {
         unsafe {
             self.env.device()
@@ -367,6 +395,9 @@ impl HelloApplication {
         self.swapchain_stuff.create_framebuffers(self.env.device(), self.final_render_pass);
 
         let dimensions = [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height];
+        self.geometry_frame.set_dimensions(dimensions);
+        self.final_frame.set_dimensions(dimensions);
+
         self.framebuffer.resize_swapchain(dimensions);
         self.quad_renderer.update_framebuffer(&self.framebuffer, dimensions);
 
