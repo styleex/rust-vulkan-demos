@@ -6,7 +6,7 @@ use ash::vk;
 use crate::render_env::env::RenderEnv;
 use std::ptr;
 
-pub struct RenderSystem {
+pub struct PrimaryCommandBuffer {
     env: Arc<RenderEnv>,
     dimensions: [u32; 2],
     cmd_bufs: Vec<vk::CommandBuffer>,
@@ -14,14 +14,14 @@ pub struct RenderSystem {
     current_frame: usize,
 }
 
-impl RenderSystem {
-    pub fn new(env: Arc<RenderEnv>, max_frame_in_flight: usize) -> RenderSystem {
+impl PrimaryCommandBuffer {
+    pub fn new(env: Arc<RenderEnv>, max_frame_in_flight: usize) -> PrimaryCommandBuffer {
         let mut cmd_bufs = Vec::with_capacity(max_frame_in_flight);
         for _ in 0..max_frame_in_flight {
             cmd_bufs.push(env.create_primary_command_buffer());
         }
 
-        RenderSystem {
+        PrimaryCommandBuffer {
             env: env.clone(),
             dimensions: [0, 0],
             cmd_bufs,
@@ -34,7 +34,7 @@ impl RenderSystem {
         self.dimensions = dims;
     }
 
-    pub fn frame(&mut self, clear_values: Vec<vk::ClearValue>, framebuffer: vk::Framebuffer, render_pass: vk::RenderPass, second_buffers: &[vk::CommandBuffer]) -> vk::CommandBuffer {
+    pub fn execute_secondary(&mut self, clear_values: Vec<vk::ClearValue>, framebuffer: vk::Framebuffer, render_pass: vk::RenderPass, second_buffers: &[vk::CommandBuffer]) -> vk::CommandBuffer {
         let command_buffer = self.cmd_bufs.get(self.current_frame).unwrap().clone();
         unsafe {
             self.env.device().reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::default()).unwrap()
@@ -90,7 +90,7 @@ impl RenderSystem {
     }
 }
 
-impl Drop for RenderSystem {
+impl Drop for PrimaryCommandBuffer {
     fn drop(&mut self) {
         unsafe {
             self.env.device().free_command_buffers(self.env.command_pool(), &self.cmd_bufs);

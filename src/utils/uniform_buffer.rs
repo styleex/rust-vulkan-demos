@@ -79,8 +79,10 @@ impl UboBuffers {
                 .unmap_memory(self.uniform_buffers_memory[current_image]);
         }
     }
+}
 
-    pub fn destroy(&self) {
+impl Drop for UboBuffers {
+    fn drop(&mut self) {
         unsafe {
             for i in 0..self.uniform_buffers.len() {
                 self.device.destroy_buffer(self.uniform_buffers[i], None);

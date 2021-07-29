@@ -250,6 +250,30 @@ impl PipelineBuilder {
         self
     }
 
+    pub fn color_attachment_count(mut self, attachment_count: usize) -> Self {
+        let mut color_blend_attachments = Vec::with_capacity(attachment_count);
+
+        for _ in 0..attachment_count {
+            println!("as");
+            color_blend_attachments.push(
+                vk::PipelineColorBlendAttachmentState::builder()
+                    .color_write_mask(
+                        vk::ColorComponentFlags::R
+                            | vk::ColorComponentFlags::G
+                            | vk::ColorComponentFlags::B
+                            | vk::ColorComponentFlags::A,
+                    )
+                    .blend_enable(true)
+                    .src_color_blend_factor(vk::BlendFactor::ONE)
+                    .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                    .build()
+            );
+        }
+
+        self.color_blend_attachment_states = color_blend_attachments;
+        self
+    }
+
     pub fn build(&mut self) -> Pipeline {
         let shader_stages = [
             self.vertex_shader.as_ref().unwrap().stage(),

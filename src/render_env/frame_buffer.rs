@@ -69,7 +69,6 @@ impl Framebuffer {
                 final_layout,
             });
 
-
             let attachment_ref = vk::AttachmentReference {
                 attachment: attachment_idx as u32,
                 layout: if format_has_depth(attachment_info.format) {

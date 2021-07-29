@@ -1,5 +1,5 @@
-use std::time;
 use std::path::Path;
+use std::time;
 
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
@@ -14,6 +14,7 @@ pub struct Vertex {
     pos: [f32; 4],
     color: [f32; 4],
     tex_coord: [f32; 2],
+    normal: [f32; 3],
 }
 
 impl Vertex {
@@ -46,6 +47,12 @@ impl Vertex {
                 location: 2,
                 format: vk::Format::R32G32_SFLOAT,
                 offset: offset_of!(Self, tex_coord) as u32,
+            },
+            vk::VertexInputAttributeDescription {
+                binding: 0,
+                location: 3,
+                format: vk::Format::R32G32B32_SFLOAT,
+                offset: offset_of!(Self, normal) as u32,
             },
         ]
     }
@@ -166,6 +173,11 @@ fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
                 ],
                 color: [1.0, 1.0, 1.0, 1.0],
                 tex_coord: [mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]],
+                normal: [
+                    mesh.normals[i * 3],
+                    mesh.normals[i * 3 + 1],
+                    mesh.normals[i * 3 + 2],
+                ]
             };
             vertices.push(vertex);
         }
@@ -176,7 +188,7 @@ fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
     (vertices, indices)
 }
 
-pub struct VertexBuffer {
+pub struct MeshVertexData {
     device: ash::Device,
     pub vertex_buffer: vk::Buffer,
     pub vertex_buffer_memory: vk::DeviceMemory,
@@ -186,13 +198,13 @@ pub struct VertexBuffer {
     pub index_count: usize,
 }
 
-impl VertexBuffer {
+impl MeshVertexData {
     pub fn create(instance: &ash::Instance,
                   physical_device: vk::PhysicalDevice,
                   device: ash::Device,
                   command_pool: vk::CommandPool,
                   submit_queue: vk::Queue,
-    ) -> VertexBuffer
+    ) -> MeshVertexData
     {
         let t1 = time::Instant::now();
         let (vertices, indices) = load_model(Path::new("assets/chalet2.obj"));
@@ -221,7 +233,7 @@ impl VertexBuffer {
 
         println!("Model uploaded: {}", t1.elapsed().as_secs_f32());
 
-        VertexBuffer {
+        MeshVertexData {
             device,
 
             vertex_buffer,
@@ -233,8 +245,10 @@ impl VertexBuffer {
             index_count,
         }
     }
+}
 
-    pub fn destroy(&self) {
+impl Drop for MeshVertexData {
+    fn drop(&mut self) {
         unsafe {
             self.device.destroy_buffer(self.index_buffer, None);
             self.device.free_memory(self.index_buffer_memory, None);

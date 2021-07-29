@@ -11,6 +11,11 @@ pub struct DescriptorSet {
     pool: vk::DescriptorPool,
 }
 
+impl DescriptorSet {
+    pub fn builder(device: &ash::Device, layout: &shader::DescriptorSetLayout) -> DescriptorSetBuilder {
+        DescriptorSetBuilder::new(device, layout)
+    }
+}
 impl Drop for DescriptorSet {
     fn drop(&mut self) {
         unsafe {

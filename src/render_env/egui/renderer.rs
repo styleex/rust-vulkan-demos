@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::ptr;
 use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
+use egui::TextureId;
 
 use crate::render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
 use crate::render_env::egui::cpu_buffer::CpuBuffer;
@@ -29,15 +31,20 @@ impl Drop for RenderOp {
     }
 }
 
+struct TextureInfo(DescriptorSet, bool);
+
 pub struct EguiRenderer {
-    render_ops: Vec<RenderOp>,
+    cmd_bufs: Vec<RenderOp>,
 
     texture: FontTexture,
     pipeline: Pipeline,
+    pipeline_msaa: Pipeline,
     render_pass: vk::RenderPass,
     env: Arc<RenderEnv>,
     descriptor_set: DescriptorSet,
     sampler: vk::Sampler,
+
+    user_textures_descriptors: HashMap<u64, TextureInfo>,
 }
 
 impl EguiRenderer {
@@ -46,9 +53,6 @@ impl EguiRenderer {
         ctx.set_style(egui::Style::default());
 
         let texture = Self::upload_font_texture(&env, ctx);
-
-        let vs = Shader::load(env.device(), "shaders/spv/egui/egui.vert.spv");
-        let ps = Shader::load(env.device(), "shaders/spv/egui/egui.frag.spv");
 
         let vertex_bindings = vec![
             vk::VertexInputBindingDescription {
@@ -110,13 +114,31 @@ impl EguiRenderer {
 
         let render_pass = create_render_pass(env.device(), output_format);
 
-        let pipeline = PipelineBuilder::new(env.device().clone(), render_pass, 0)
-            .vertex_input(vertex_bindings, vert_attrs)
-            .vertex_shader(vs)
-            .fragment_shader(ps)
-            .disable_culling()
-            .blend()
-            .build();
+        let pipeline = {
+            let vs = Shader::load(env.device(), "shaders/spv/egui/egui.vert.spv");
+            let ps = Shader::load(env.device(), "shaders/spv/egui/egui.frag.spv");
+
+            PipelineBuilder::new(env.device().clone(), render_pass, 0)
+                .vertex_input(vertex_bindings.clone(), vert_attrs.clone())
+                .vertex_shader(vs)
+                .fragment_shader(ps)
+                .disable_culling()
+                .blend()
+                .build()
+        };
+
+        let pipeline_msaa = {
+            let vs = Shader::load(env.device(), "shaders/spv/egui/egui_msaa.vert.spv");
+            let ps = Shader::load(env.device(), "shaders/spv/egui/egui_msaa.frag.spv");
+
+            PipelineBuilder::new(env.device().clone(), render_pass, 0)
+                .vertex_input(vertex_bindings.clone(), vert_attrs.clone())
+                .vertex_shader(vs)
+                .fragment_shader(ps)
+                .disable_culling()
+                .blend()
+                .build()
+        };
 
         let descriptor_set = DescriptorSetBuilder::new(env.device(), &pipeline.descriptor_set_layouts[0])
             .add_image(texture.0.texture_image_view, sampler)
@@ -126,16 +148,19 @@ impl EguiRenderer {
             env,
             texture,
             pipeline,
+            pipeline_msaa,
             render_pass,
-            render_ops: vec![],
+            cmd_bufs: vec![],
             descriptor_set,
             sampler,
+            user_textures_descriptors: HashMap::new(),
         }
     }
 
     pub fn render(&mut self, ctx: egui::CtxRef, meshes: Vec<egui::ClippedMesh>, dimensions: [u32; 2], frames: usize, scale_factor: f32) -> vk::CommandBuffer {
-        if self.render_ops.len() > frames {
-            self.render_ops.remove(0);
+        // Generate cmd buf every frame
+        if self.cmd_bufs.len() > frames {
+            self.cmd_bufs.remove(0);
         }
 
         if ctx.texture().version != self.texture.1 {
@@ -168,7 +193,7 @@ impl EguiRenderer {
             framebuffer: vk::Framebuffer::null(),
             occlusion_query_enable: 0,
             query_flags: Default::default(),
-            pipeline_statistics: Default::default()
+            pipeline_statistics: Default::default(),
         };
         let begin_info = vk::CommandBufferBeginInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
@@ -198,13 +223,6 @@ impl EguiRenderer {
             let offsets = [0];
             device.cmd_bind_vertex_buffers(cmd_buf, 0, &vertex_buffers, &offsets);
             device.cmd_bind_index_buffer(cmd_buf, ib.buffer, 0, vk::IndexType::UINT32);
-            device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline);
-            device.cmd_push_constants(cmd_buf, self.pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0,
-                                      &data);
-
-            let bind_descriptors = [self.descriptor_set.set];
-            device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline_layout,
-                                            0, &bind_descriptors, &[]);
 
             let mut index_base = 0;
             let mut vertex_base = 0;
@@ -248,6 +266,33 @@ impl EguiRenderer {
                         .build()],
                 );
 
+                let bind_descriptors = match mesh.texture_id {
+                    TextureId::Egui => [self.descriptor_set.set],
+                    TextureId::User(texture_id) => {
+                        [self.user_textures_descriptors[&texture_id].0.set]
+                    }
+                };
+
+                let pipeline = match mesh.texture_id {
+                    TextureId::Egui => &self.pipeline,
+                    TextureId::User(texture_id) => {
+                        let ret = if self.user_textures_descriptors[&texture_id].1 {
+                            &self.pipeline_msaa
+                        } else {
+                            &self.pipeline
+                        };
+
+                        ret
+                    }
+                };
+
+                device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline);
+                device.cmd_push_constants(cmd_buf, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0,
+                                          &data);
+
+                device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout,
+                                                0, &bind_descriptors, &[]);
+
                 device.cmd_draw_indexed(
                     cmd_buf,
                     mesh.indices.len() as u32,
@@ -264,7 +309,7 @@ impl EguiRenderer {
             device.end_command_buffer(cmd_buf).unwrap();
         }
 
-        self.render_ops.push(RenderOp {
+        self.cmd_bufs.push(RenderOp {
             env: self.env.clone(),
             ib,
             vb,
@@ -295,6 +340,22 @@ impl EguiRenderer {
         );
 
         FontTexture(texture, font_tx.version)
+    }
+
+    pub fn register_texture(&mut self, id: u64, texture: vk::ImageView, multisampled: bool) {
+
+        let layout = if multisampled {
+            &self.pipeline_msaa.descriptor_set_layouts[0]
+        } else {
+            &self.pipeline.descriptor_set_layouts[0]
+        };
+
+        let descriptor_set = DescriptorSetBuilder::new(
+            self.env.device(), layout)
+            .add_image(texture, self.sampler)
+            .build();
+
+        self.user_textures_descriptors.insert(id, TextureInfo(descriptor_set, multisampled));
     }
 }
 

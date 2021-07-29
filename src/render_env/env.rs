@@ -20,7 +20,7 @@ pub struct RenderEnv {
     pub(super) command_pool: vk::CommandPool,
 
     // cached info
-    pub(super) mem_properties: vk::PhysicalDeviceMemoryProperties,
+    pub mem_properties: vk::PhysicalDeviceMemoryProperties,
 
     // surface
     pub(super) surface_loader: ash::extensions::khr::Surface,

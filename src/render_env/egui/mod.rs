@@ -22,10 +22,12 @@ pub struct Egui {
     current_cursor_icon: egui::CursorIcon,
 
     start_time: Option<Instant>,
+    dimensions: [u32; 2],
+    max_frames_in_flight: usize,
 }
 
 impl Egui {
-    pub fn new(env: Arc<RenderEnv>, output_format: vk::Format, scale_factor: f64, dimensions: [u32; 2]) -> Egui {
+    pub fn new(env: Arc<RenderEnv>, output_format: vk::Format, scale_factor: f64, dimensions: [u32; 2], max_frames_in_flight: usize) -> Egui {
         let mut ctx = egui::CtxRef::default();
 
         let raw_input = egui::RawInput {
@@ -51,6 +53,8 @@ impl Egui {
             renderer,
             current_cursor_icon: egui::CursorIcon::None,
             start_time: None,
+            dimensions,
+            max_frames_in_flight,
         }
     }
 
@@ -70,7 +74,7 @@ impl Egui {
         self.ctx.begin_frame(raw_input);
     }
 
-    pub fn end_frame(&mut self, wnd: &winit::window::Window, dimensions: [u32; 2], max_frames: usize) -> vk::CommandBuffer {
+    pub fn end_frame(&mut self, wnd: &winit::window::Window) -> vk::CommandBuffer {
         let (output, shapes) = self.ctx.end_frame();
         if self.current_cursor_icon != output.cursor_icon {
             if let Some(cursor_icon) = egui_to_winit_cursor_icon(output.cursor_icon) {
@@ -87,15 +91,23 @@ impl Egui {
         let gui_render_op = self.renderer.render(
             self.ctx.clone(),
             clipped_meshes,
-            dimensions,
-            max_frames,
+            self.dimensions,
+            self.max_frames_in_flight,
             self.winit_input.scale_factor as f32,
         );
 
         gui_render_op
     }
 
+    pub fn set_dimensions(&mut self, dimensions: [u32; 2]) {
+        self.dimensions = dimensions;
+    }
+
     pub fn context(&self) -> egui::CtxRef {
         self.ctx.clone()
+    }
+
+    pub fn register_texture(&mut self, id: u64, texture: vk::ImageView, multisampled: bool) {
+        self.renderer.register_texture(id, texture, multisampled);
     }
 }
