@@ -160,8 +160,6 @@ fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
             panic!("Missing texture coordinate for the model.")
         }
 
-        println!("{}", mesh.texcoord_indices.len());
-
         let total_vertices_count = mesh.positions.len() / 3;
         for i in 0..total_vertices_count {
             let vertex = Vertex {
@@ -177,7 +175,7 @@ fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
                     mesh.normals[i * 3],
                     mesh.normals[i * 3 + 1],
                     mesh.normals[i * 3 + 2],
-                ]
+                ],
             };
             vertices.push(vertex);
         }
@@ -199,11 +197,12 @@ pub struct MeshVertexData {
 }
 
 impl MeshVertexData {
-    pub fn create(instance: &ash::Instance,
-                  physical_device: vk::PhysicalDevice,
-                  device: ash::Device,
-                  command_pool: vk::CommandPool,
-                  submit_queue: vk::Queue,
+    pub fn create(
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+        device: ash::Device,
+        command_pool: vk::CommandPool,
+        submit_queue: vk::Queue,
     ) -> MeshVertexData
     {
         let t1 = time::Instant::now();

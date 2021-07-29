@@ -27,7 +27,7 @@ pub struct Egui {
 }
 
 impl Egui {
-    pub fn new(env: Arc<RenderEnv>, output_format: vk::Format, scale_factor: f64, dimensions: [u32; 2], max_frames_in_flight: usize) -> Egui {
+    pub fn new(env: Arc<RenderEnv>, output_format: vk::Format, scale_factor: f64, dimensions: [u32; 2], max_frames_in_flight: usize, msaa_samples: vk::SampleCountFlags) -> Egui {
         let mut ctx = egui::CtxRef::default();
 
         let raw_input = egui::RawInput {
@@ -44,7 +44,7 @@ impl Egui {
         ctx.begin_frame(raw_input.clone());
         let (_output, _shapes) = ctx.end_frame();
 
-        let renderer = EguiRenderer::new(env, ctx.clone(), output_format);
+        let renderer = EguiRenderer::new(env, ctx.clone(), output_format, msaa_samples);
         let winit_input = WinitInput::new(raw_input, scale_factor);
 
         Egui {

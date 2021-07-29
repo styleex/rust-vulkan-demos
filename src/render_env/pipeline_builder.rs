@@ -254,7 +254,6 @@ impl PipelineBuilder {
         let mut color_blend_attachments = Vec::with_capacity(attachment_count);
 
         for _ in 0..attachment_count {
-            println!("as");
             color_blend_attachments.push(
                 vk::PipelineColorBlendAttachmentState::builder()
                     .color_write_mask(

@@ -10,7 +10,7 @@ use crate::render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
 use crate::render_env::egui::cpu_buffer::CpuBuffer;
 use crate::render_env::env::RenderEnv;
 use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
-use crate::render_env::shader::Shader;
+use crate::render_env::shader::{Shader, ConstantsBuilder};
 use crate::utils::texture::Texture;
 
 struct FontTexture(Texture, u64);
@@ -31,7 +31,10 @@ impl Drop for RenderOp {
     }
 }
 
-struct TextureInfo(DescriptorSet, bool);
+struct TextureInfo {
+    descriptor_set: DescriptorSet,
+    multisampled: bool,
+}
 
 pub struct EguiRenderer {
     cmd_bufs: Vec<RenderOp>,
@@ -48,7 +51,7 @@ pub struct EguiRenderer {
 }
 
 impl EguiRenderer {
-    pub fn new(env: Arc<RenderEnv>, ctx: egui::CtxRef, output_format: vk::Format) -> EguiRenderer {
+    pub fn new(env: Arc<RenderEnv>, ctx: egui::CtxRef, output_format: vk::Format, msaa_samples: vk::SampleCountFlags) -> EguiRenderer {
         ctx.set_fonts(egui::FontDefinitions::default());
         ctx.set_style(egui::Style::default());
 
@@ -129,7 +132,8 @@ impl EguiRenderer {
 
         let pipeline_msaa = {
             let vs = Shader::load(env.device(), "shaders/spv/egui/egui_msaa.vert.spv");
-            let ps = Shader::load(env.device(), "shaders/spv/egui/egui_msaa.frag.spv");
+            let ps = Shader::load(env.device(), "shaders/spv/egui/egui_msaa.frag.spv")
+                .specialize(ConstantsBuilder::new().add_u32(msaa_samples.as_raw() as u32));
 
             PipelineBuilder::new(env.device().clone(), render_pass, 0)
                 .vertex_input(vertex_bindings.clone(), vert_attrs.clone())
@@ -266,23 +270,16 @@ impl EguiRenderer {
                         .build()],
                 );
 
-                let bind_descriptors = match mesh.texture_id {
-                    TextureId::Egui => [self.descriptor_set.set],
+                let (pipeline, descriptor_set) = match mesh.texture_id {
+                    TextureId::Egui => (&self.pipeline, self.descriptor_set.set),
                     TextureId::User(texture_id) => {
-                        [self.user_textures_descriptors[&texture_id].0.set]
-                    }
-                };
-
-                let pipeline = match mesh.texture_id {
-                    TextureId::Egui => &self.pipeline,
-                    TextureId::User(texture_id) => {
-                        let ret = if self.user_textures_descriptors[&texture_id].1 {
+                        let pipeline = if self.user_textures_descriptors[&texture_id].multisampled {
                             &self.pipeline_msaa
                         } else {
                             &self.pipeline
                         };
 
-                        ret
+                        (pipeline, self.user_textures_descriptors[&texture_id].descriptor_set.set)
                     }
                 };
 
@@ -291,7 +288,7 @@ impl EguiRenderer {
                                           &data);
 
                 device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout,
-                                                0, &bind_descriptors, &[]);
+                                                0, &[descriptor_set], &[]);
 
                 device.cmd_draw_indexed(
                     cmd_buf,
@@ -343,7 +340,6 @@ impl EguiRenderer {
     }
 
     pub fn register_texture(&mut self, id: u64, texture: vk::ImageView, multisampled: bool) {
-
         let layout = if multisampled {
             &self.pipeline_msaa.descriptor_set_layouts[0]
         } else {
@@ -355,7 +351,10 @@ impl EguiRenderer {
             .add_image(texture, self.sampler)
             .build();
 
-        self.user_textures_descriptors.insert(id, TextureInfo(descriptor_set, multisampled));
+        self.user_textures_descriptors.insert(id, TextureInfo {
+            descriptor_set,
+            multisampled,
+        });
     }
 }
 

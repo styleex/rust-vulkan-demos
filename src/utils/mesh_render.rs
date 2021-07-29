@@ -12,8 +12,8 @@ use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 use crate::render_env::shader;
 use crate::utils::texture::Texture;
 use crate::utils::uniform_buffer::UboBuffers;
-use crate::utils::vertex;
-use crate::utils::vertex::MeshVertexData;
+use crate::utils::mesh;
+use crate::utils::mesh::MeshVertexData;
 
 pub struct MeshRenderer {
     cmd_bufs: Vec<vk::CommandBuffer>,
@@ -44,7 +44,7 @@ impl MeshRenderer {
             PipelineBuilder::new(env.device().clone(), render_pass, 0)
                 .vertex_shader(vert_shader_module)
                 .fragment_shader(frag_shader_module)
-                .vertex_input(vertex::Vertex::get_binding_descriptions(), vertex::Vertex::get_attribute_descriptions())
+                .vertex_input(mesh::Vertex::get_binding_descriptions(), mesh::Vertex::get_attribute_descriptions())
                 .msaa(msaa_samples)
                 .with_depth_test()
                 .color_attachment_count(color_attachment_count)
@@ -66,7 +66,7 @@ impl MeshRenderer {
             max_inflight_frames,
         );
 
-        let vertex_buffer = vertex::MeshVertexData::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
+        let vertex_buffer = mesh::MeshVertexData::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
 
         let mut cmd_bufs = vec![];
         let mut descriptor_sets = vec![];

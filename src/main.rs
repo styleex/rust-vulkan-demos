@@ -40,7 +40,7 @@ struct HelloApplication {
     msaa_samples: vk::SampleCountFlags,
     camera: camera::Camera,
 
-    framebuffer: frame_buffer::Framebuffer,
+    offscreen_buffer: frame_buffer::Framebuffer,
 
     final_render_pass: vk::RenderPass,
     env: Arc<env::RenderEnv>,
@@ -90,7 +90,7 @@ impl HelloApplication {
         let quad_renderer = QuadRenderer::new(env.clone(), &offscreen_framebuffer, quad_render_pass, msaa_samples, dimensions);
         let sync = sync::create_sync_objects(env.device());
 
-        let mut egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions, MAX_FRAMES_IN_FLIGHT);
+        let mut egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions, MAX_FRAMES_IN_FLIGHT, msaa_samples);
         egui.register_texture(0, offscreen_framebuffer.attachments[2].view, true);
 
         let mut draw_mesh_render_system = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
@@ -124,7 +124,7 @@ impl HelloApplication {
             msaa_samples,
             camera,
 
-            framebuffer: offscreen_framebuffer,
+            offscreen_buffer: offscreen_framebuffer,
 
             egui,
 
@@ -247,8 +247,8 @@ impl HelloApplication {
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let geometry_pass_cmd = self.geometry_pass_draw_command.execute_secondary(
             clear_values,
-            self.framebuffer.framebuffer.unwrap(),
-            self.framebuffer.render_pass,
+            self.offscreen_buffer.framebuffer.unwrap(),
+            self.offscreen_buffer.render_pass,
             &[mesh_draw]);
 
         self.egui.begin_frame();
@@ -350,8 +350,8 @@ impl HelloApplication {
             // let mut rgb: [f32; 3] = [0.0, 0.0, 0.0];
             ui.color_edit_button_rgb(&mut self.clear_color);
 
-            ui.separator();
-            ui.image(egui::TextureId::User(0), [300.0, 200.0]);
+            // ui.separator();
+            // ui.image(egui::TextureId::User(0), [300.0, 200.0]);
         });
     }
 
@@ -370,11 +370,11 @@ impl HelloApplication {
         self.geometry_pass_draw_command.set_dimensions(dimensions);
         self.final_pass_draw_command.set_dimensions(dimensions);
 
-        self.framebuffer.resize_swapchain(dimensions);
+        self.offscreen_buffer.resize_swapchain(dimensions);
         self.egui.set_dimensions(dimensions);
-        self.egui.register_texture(0, self.framebuffer.attachments[2].view, true);
+        self.egui.register_texture(0, self.offscreen_buffer.attachments[2].view, true);
 
-        self.quad_renderer.update_framebuffer(&self.framebuffer, dimensions);
+        self.quad_renderer.update_framebuffer(&self.offscreen_buffer, dimensions);
         self.mesh_renderer.resize_framebuffer(dimensions);
     }
 
@@ -389,7 +389,7 @@ impl Drop for HelloApplication {
             self.sync.destroy();
             self.cleanup_swapchain();
 
-            self.framebuffer.destroy();
+            self.offscreen_buffer.destroy();
             self.env.device().destroy_render_pass(self.final_render_pass, None);
         }
     }
