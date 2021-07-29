@@ -6,3 +6,5 @@ pub mod texture;
 pub mod buffer_utils;
 pub mod quad_render;
 pub mod mesh_render;
+pub mod skybox;
+pub mod skybox_render;

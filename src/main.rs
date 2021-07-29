@@ -15,6 +15,7 @@ use crate::render_env::primary_cmd_buffer::PrimaryCommandBuffer;
 use crate::utils::mesh_render::MeshRenderer;
 use crate::utils::quad_render::QuadRenderer;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
+use crate::utils::skybox_render::SkyboxRenderer;
 
 mod utils;
 mod camera;
@@ -32,6 +33,8 @@ struct HelloApplication {
     swapchain_stuff: render_env::swapchain::SwapChain,
 
     mesh_renderer: MeshRenderer,
+    skybox_renderer: SkyboxRenderer,
+
     sync: sync::SyncObjects,
 
     current_frame: usize,
@@ -109,6 +112,14 @@ impl HelloApplication {
             dimensions,
         );
 
+        let skybox_renderer = SkyboxRenderer::new(
+            env.clone(),
+            offscreen_framebuffer.render_pass(),
+            offscreen_framebuffer.attachments.len() - 1, // color attachments only
+            msaa_samples,
+            MAX_FRAMES_IN_FLIGHT,
+            dimensions,
+        );
         println!("created");
 
         HelloApplication {
@@ -132,6 +143,7 @@ impl HelloApplication {
             final_render_pass: quad_render_pass,
 
             mesh_renderer,
+            skybox_renderer,
         }
     }
 
@@ -245,11 +257,13 @@ impl HelloApplication {
         ];
 
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
+        let skybox_draw = self.skybox_renderer.draw(self.camera.skybox_view_matrix(), self.camera.proj_matrix());
+
         let geometry_pass_cmd = self.geometry_pass_draw_command.execute_secondary(
             clear_values,
             self.offscreen_buffer.framebuffer.unwrap(),
             self.offscreen_buffer.render_pass,
-            &[mesh_draw]);
+            &[mesh_draw, skybox_draw]);
 
         self.egui.begin_frame();
         self.render_gui();
@@ -376,6 +390,7 @@ impl HelloApplication {
 
         self.quad_renderer.update_framebuffer(&self.offscreen_buffer, dimensions);
         self.mesh_renderer.resize_framebuffer(dimensions);
+        self.skybox_renderer.resize_framebuffer(dimensions);
     }
 
     fn cleanup_swapchain(&mut self) {

@@ -1,4 +1,4 @@
-use cgmath::{Deg, Matrix4, Point3, SquareMatrix, vec3, Vector3};
+use cgmath::{Deg, Matrix4, Point3, SquareMatrix, vec3, Vector3, EuclideanSpace};
 use cgmath::{Angle, Rad};
 use cgmath::InnerSpace;
 use std::f32;
@@ -47,6 +47,10 @@ impl Camera {
         return Matrix4::<f32>::look_at_rh(self.position, self.position + self.view_dir, self.up_dir);
     }
 
+    pub fn skybox_view_matrix(&self) -> Matrix4<f32> {
+        return Matrix4::<f32>::look_at_rh(Point3::new(0.0, 0.0, 0.0), Point3::from_vec(self.view_dir), self.up_dir);
+    }
+
     pub fn proj_matrix(&self) -> Matrix4<f32> {
         self.proj
     }
@@ -74,7 +78,7 @@ impl Camera {
         match event {
             &WindowEvent::KeyboardInput { input, .. } => {
                 self.handle_keyboard(input);
-            },
+            }
 
             &WindowEvent::MouseInput { state, button, .. } => {
                 self.mouse_pressed = (state == ElementState::Pressed) && (button == MouseButton::Left);
