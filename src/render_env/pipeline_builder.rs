@@ -280,6 +280,12 @@ impl PipelineBuilder {
         self
     }
 
+    pub fn cull_mode(mut self, mode: vk::CullModeFlags) -> Self {
+        self.rasterization.cull_mode = mode;
+
+        self
+    }
+
     pub fn color_attachment_count(mut self, attachment_count: usize) -> Self {
         let mut color_blend_attachments = Vec::with_capacity(attachment_count);
 

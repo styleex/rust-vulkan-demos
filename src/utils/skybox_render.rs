@@ -10,10 +10,11 @@ use crate::render_env::descriptor_set::DescriptorSet;
 use crate::render_env::env::RenderEnv;
 use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 use crate::render_env::shader;
-use crate::utils::texture::Texture;
 use crate::utils::uniform_buffer::UboBuffers;
 use crate::utils::{skybox};
 use crate::utils::skybox::SkyboxVertexData;
+use crate::utils::cube_texture::CubeTexture;
+
 
 pub struct SkyboxRenderer {
     cmd_bufs: Vec<vk::CommandBuffer>,
@@ -22,7 +23,7 @@ pub struct SkyboxRenderer {
 
     render_pass: vk::RenderPass,
     pipeline: Pipeline,
-    texture: Texture,
+    texture: CubeTexture,
 
     descriptor_sets: Vec<DescriptorSet>,
     uniforms: UboBuffers,
@@ -48,16 +49,16 @@ impl SkyboxRenderer {
                 .msaa(msaa_samples)
                 .color_attachment_count(color_attachment_count)
                 .with_depth_func(vk::CompareOp::LESS_OR_EQUAL)
-                .disable_culling()
+                .cull_mode(vk::CullModeFlags::BACK)
                 .build()
         };
 
-        let texture = Texture::new(
+        let texture = CubeTexture::new(
             env.device().clone(),
             env.command_pool(),
             env.queue(),
             &env.mem_properties,
-            Path::new("assets/chalet.jpg"),
+            Path::new("assets/skybox"),
         );
 
         let uniforms = UboBuffers::new(

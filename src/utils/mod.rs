@@ -8,3 +8,4 @@ pub mod quad_render;
 pub mod mesh_render;
 pub mod skybox;
 pub mod skybox_render;
+pub mod cube_texture;
