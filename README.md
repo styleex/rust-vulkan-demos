@@ -13,6 +13,8 @@ Plan:
     
     * (OK) Framebuffer + attachment image for simplifying offscreen buffer creation.
 
+* (OK) base skybox
+  
 * (OK) egui integration 
   
 * Deferred shading pipeline 
