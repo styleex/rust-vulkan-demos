@@ -46,7 +46,7 @@ impl CubeTexture {
         let mut image_array_data = Vec::new();
 
         for face in faces.iter() {
-            let mut image_object = image::open(image_path.join(face)).unwrap();
+            let image_object = image::open(image_path.join(face)).unwrap();
 
             let image_data = match &image_object {
                 image::DynamicImage::ImageLumaA8(_)
@@ -60,6 +60,7 @@ impl CubeTexture {
                 image_height = image_object.height();
 
                 image_array_data.reserve_exact((4 * image_width * image_height) as usize * faces.len());
+                initialized = true;
             }
 
             image_array_data.extend(image_data);
@@ -133,7 +134,7 @@ fn create_texture_image(
     };
 
     // FIXME:
-    let mip_levels = 1;
+    // let mip_levels = 1;
 
 
     if mem_size <= 0 {
@@ -278,7 +279,7 @@ fn generate_mipmaps(
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 mip_level: i - 1,
                 base_array_layer: 0,
-                layer_count: 1,
+                layer_count,
             },
             src_offsets: [
                 vk::Offset3D { x: 0, y: 0, z: 0 },
@@ -292,7 +293,7 @@ fn generate_mipmaps(
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 mip_level: i,
                 base_array_layer: 0,
-                layer_count: 1,
+                layer_count,
             },
             dst_offsets: [
                 vk::Offset3D { x: 0, y: 0, z: 0 },
@@ -492,7 +493,7 @@ fn transition_image_layout(
         panic!("Unsupported layout transition!")
     }
 
-    let mut image_barriers = [
+    let image_barriers = [
         vk::ImageMemoryBarrier {
             s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
             p_next: ptr::null(),

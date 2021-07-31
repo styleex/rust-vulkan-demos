@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use cgmath::{Matrix4, SquareMatrix, Deg, Rad};
+use cgmath::{Matrix4, Deg, Rad};
 
 use crate::render_env::descriptor_set::DescriptorSet;
 use crate::render_env::env::RenderEnv;

@@ -1,6 +1,6 @@
 use std::ptr;
 
-use ash::version::DeviceV1_0;
+use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 
 pub(crate) fn find_memory_type(
@@ -143,4 +143,88 @@ pub fn end_single_time_command(
             .expect("Failed to wait Queue idle!");
         device.free_command_buffers(command_pool, &buffers_to_submit);
     }
+}
+
+
+fn copy_buffer(
+    device: &ash::Device,
+    submit_queue: vk::Queue,
+    command_pool: vk::CommandPool,
+    src_buffer: vk::Buffer,
+    dst_buffer: vk::Buffer,
+    size: vk::DeviceSize,
+) {
+    let command_buffer = begin_single_time_command(device, command_pool);
+
+    unsafe {
+        let copy_regions = [vk::BufferCopy {
+            src_offset: 0,
+            dst_offset: 0,
+            size,
+        }];
+
+        device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &copy_regions);
+    }
+
+    end_single_time_command(device, command_pool, submit_queue, command_buffer);
+}
+
+pub fn create_data_buffer<T: Sized>(
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    device: ash::Device,
+    command_pool: vk::CommandPool,
+    submit_queue: vk::Queue,
+    usage: vk::BufferUsageFlags,
+    data: Vec<T>) -> (vk::Buffer, vk::DeviceMemory)
+{
+    let mem_properties =
+        unsafe { instance.get_physical_device_memory_properties(physical_device) };
+
+    let data_size = (std::mem::size_of::<T>() * data.len()) as u64;
+    let (staging_buffer, staging_buffer_memory) = create_buffer(
+        &device,
+        data_size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        &mem_properties,
+    );
+
+    unsafe {
+        let data_ptr = device
+            .map_memory(
+                staging_buffer_memory,
+                0,
+                data_size,
+                vk::MemoryMapFlags::empty(),
+            )
+            .expect("Failed to Map Memory") as *mut T;
+
+        data_ptr.copy_from_nonoverlapping(data.as_ptr(), data.len());
+
+        device.unmap_memory(staging_buffer_memory);
+    }
+
+    let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+        &device,
+        data_size,
+        vk::BufferUsageFlags::TRANSFER_DST | usage,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        &mem_properties);
+
+    copy_buffer(
+        &device,
+        submit_queue,
+        command_pool,
+        staging_buffer,
+        vertex_buffer,
+        data_size,
+    );
+
+    unsafe {
+        device.destroy_buffer(staging_buffer, None);
+        device.free_memory(staging_buffer_memory, None);
+    }
+
+    (vertex_buffer, vertex_buffer_memory)
 }
