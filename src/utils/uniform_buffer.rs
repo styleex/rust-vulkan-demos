@@ -53,9 +53,9 @@ impl UboBuffers {
         }
     }
 
-    pub fn update_uniform_buffer(&self, current_image: usize, view: Matrix4<f32>, proj: Matrix4<f32>) {
+    pub fn update_uniform_buffer(&self, current_image: usize, world: Matrix4<f32>, view: Matrix4<f32>, proj: Matrix4<f32>) {
         let ubos = [UniformBufferObject {
-            model: Matrix4::from_angle_x(Rad::from(Deg(90.0))),
+            model: world,
             view,
             proj,
         }];

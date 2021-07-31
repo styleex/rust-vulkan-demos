@@ -29,24 +29,8 @@ impl CubeTexture {
         device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
         image_path: &Path,
     ) -> CubeTexture {
-        // let faces = [
-        //     "left.jpg",
-        //     "right.jpg",
-        //     "bottom.jpg",
-        //     "top.jpg",
-        //     "back.jpg",
-        //     "front.jpg",
-        // ];
-
-        // let faces = [
-        //     "right.jpg",
-        //     "left.jpg",
-        //     "top.jpg",
-        //     "bottom.jpg",
-        //     "front.jpg",
-        //     "back.jpg",
-        // ];
-
+        // Face order: +X, -X, +Y, -Y, +Z, -Z
+        // FROM: https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkImageSubresourceRange.html#_description
         let faces = [
             "right.jpg",
             "left.jpg",
@@ -63,7 +47,6 @@ impl CubeTexture {
 
         for face in faces.iter() {
             let mut image_object = image::open(image_path.join(face)).unwrap();
-            // image_object = image_object.flipv();
 
             let image_data = match &image_object {
                 image::DynamicImage::ImageLumaA8(_)

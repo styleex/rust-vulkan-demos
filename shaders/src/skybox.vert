@@ -23,5 +23,6 @@ void main() {
     fragColor = inColor;
 
     fragUVW = inPosition;
-    fragUVW.xy *= -1.0;
+
+    fragUVW.y *= -1.0;
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use cgmath::Matrix4;
+use cgmath::{Matrix4, SquareMatrix, Deg, Rad};
 
 use crate::render_env::descriptor_set::DescriptorSet;
 use crate::render_env::env::RenderEnv;
@@ -195,7 +195,8 @@ impl MeshRenderer {
     }
 
     pub fn draw(&mut self, view: Matrix4<f32>, proj: Matrix4<f32>) -> vk::CommandBuffer {
-        self.uniforms.update_uniform_buffer(self.current_frame, view, proj);
+        let world = Matrix4::<f32>::from_angle_x(Rad::from(Deg(90.0)));
+        self.uniforms.update_uniform_buffer(self.current_frame, world, view, proj);
 
         let current_frame = self.current_frame;
         self.current_frame = (self.current_frame + 1) % self.max_inflight_frames;
