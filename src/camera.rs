@@ -55,6 +55,10 @@ impl Camera {
         self.proj
     }
 
+    pub fn position(&self) -> Point3<f32> {
+        self.position
+    }
+
     fn handle_keyboard(&mut self, input: KeyboardInput) {
         if input.state == ElementState::Pressed {
             match input.virtual_keycode {

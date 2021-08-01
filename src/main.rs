@@ -16,7 +16,7 @@ use crate::utils::mesh_render::MeshRenderer;
 use crate::utils::quad_render::QuadRenderer;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::skybox_render::SkyboxRenderer;
-use crate::utils::heightmap_terrain::{HeightMap, TerrainData};
+use crate::utils::heightmap_terrain::terrain::{HeightMap, TerrainData};
 use std::path::Path;
 use crate::utils::heightmap_terrain::terrain_renderer::TerrainRenderer;
 
@@ -374,7 +374,10 @@ impl HelloApplication {
             // let mut rgb: [f32; 3] = [0.0, 0.0, 0.0];
             ui.color_edit_button_rgb(&mut self.clear_color);
 
-            // ui.separator();
+            ui.separator();
+
+            let camera_pos = self.camera.position();
+            ui.label(format!("X: {}, Y: {}, Z: {}", camera_pos.x, camera_pos.y, camera_pos.z));
             // ui.image(egui::TextureId::User(0), [300.0, 200.0]);
         });
     }

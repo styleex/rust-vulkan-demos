@@ -13,7 +13,7 @@ use crate::render_env::shader;
 use crate::utils::texture::Texture;
 use crate::utils::uniform_buffer::UboBuffers;
 
-use super::{TerrainData, Vertex};
+use super::terrain::{TerrainData, Vertex};
 
 pub struct TerrainRenderer {
     cmd_bufs: Vec<vk::CommandBuffer>,
