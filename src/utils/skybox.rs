@@ -12,7 +12,7 @@ pub struct SkyboxVertex {
 }
 
 impl SkyboxVertex {
-    pub fn get_binding_descriptions() -> Vec<vk::VertexInputBindingDescription> {
+    pub fn binding_descriptions() -> Vec<vk::VertexInputBindingDescription> {
         vec![
             vk::VertexInputBindingDescription {
                 binding: 0,
@@ -22,7 +22,7 @@ impl SkyboxVertex {
         ]
     }
 
-    pub fn get_attribute_descriptions() -> Vec<vk::VertexInputAttributeDescription> {
+    pub fn attribute_descriptions() -> Vec<vk::VertexInputAttributeDescription> {
         vec![
             vk::VertexInputAttributeDescription {
                 location: 0,

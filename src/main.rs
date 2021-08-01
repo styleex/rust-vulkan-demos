@@ -16,6 +16,9 @@ use crate::utils::mesh_render::MeshRenderer;
 use crate::utils::quad_render::QuadRenderer;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::skybox_render::SkyboxRenderer;
+use crate::utils::heightmap_terrain::{HeightMap, TerrainData};
+use std::path::Path;
+use crate::utils::heightmap_terrain::terrain_renderer::TerrainRenderer;
 
 mod utils;
 mod camera;
@@ -44,6 +47,8 @@ struct HelloApplication {
     camera: camera::Camera,
 
     offscreen_buffer: frame_buffer::Framebuffer,
+
+    terrain_renderer: TerrainRenderer,
 
     final_render_pass: vk::RenderPass,
     env: Arc<env::RenderEnv>,
@@ -89,7 +94,6 @@ impl HelloApplication {
         ));
         offscreen_framebuffer.resize_swapchain(dimensions);
 
-
         let quad_renderer = QuadRenderer::new(env.clone(), &offscreen_framebuffer, quad_render_pass, msaa_samples, dimensions);
         let sync = sync::create_sync_objects(env.device());
 
@@ -101,7 +105,6 @@ impl HelloApplication {
 
         let mut quad_render_system = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
         quad_render_system.set_dimensions(dimensions);
-
 
         let mesh_renderer = MeshRenderer::new(
             env.clone(),
@@ -120,6 +123,11 @@ impl HelloApplication {
             MAX_FRAMES_IN_FLIGHT,
             dimensions,
         );
+
+        let height_map = HeightMap::from_png(Path::new("./assets/terrain/heightmap.png"));
+        let terrain_data = TerrainData::new(env.clone(), height_map);
+        let terrain_renderer = TerrainRenderer::new(env.clone(), offscreen_framebuffer.render_pass(),
+        offscreen_framebuffer.attachments.len() - 1, terrain_data, msaa_samples, MAX_FRAMES_IN_FLIGHT, dimensions);
         println!("created");
 
         HelloApplication {
@@ -144,6 +152,7 @@ impl HelloApplication {
 
             mesh_renderer,
             skybox_renderer,
+            terrain_renderer
         }
     }
 
@@ -257,13 +266,14 @@ impl HelloApplication {
         ];
 
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
+        let terrain_draw = self.terrain_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let skybox_draw = self.skybox_renderer.draw(self.camera.skybox_view_matrix(), self.camera.proj_matrix());
 
         let geometry_pass_cmd = self.geometry_pass_draw_command.execute_secondary(
             clear_values,
             self.offscreen_buffer.framebuffer.unwrap(),
             self.offscreen_buffer.render_pass,
-            &[mesh_draw, skybox_draw]);
+            &[terrain_draw, mesh_draw, skybox_draw]);
 
         self.egui.begin_frame();
         self.render_gui();
@@ -391,6 +401,7 @@ impl HelloApplication {
         self.quad_renderer.update_framebuffer(&self.offscreen_buffer, dimensions);
         self.mesh_renderer.resize_framebuffer(dimensions);
         self.skybox_renderer.resize_framebuffer(dimensions);
+        self.terrain_renderer.resize_framebuffer(dimensions);
     }
 
     fn cleanup_swapchain(&mut self) {

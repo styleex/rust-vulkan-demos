@@ -45,7 +45,7 @@ impl SkyboxRenderer {
             PipelineBuilder::new(env.device().clone(), render_pass, 0)
                 .vertex_shader(vert_shader_module)
                 .fragment_shader(frag_shader_module)
-                .vertex_input(skybox::SkyboxVertex::get_binding_descriptions(), skybox::SkyboxVertex::get_attribute_descriptions())
+                .vertex_input(skybox::SkyboxVertex::binding_descriptions(), skybox::SkyboxVertex::attribute_descriptions())
                 .msaa(msaa_samples)
                 .color_attachment_count(color_attachment_count)
                 .with_depth_func(vk::CompareOp::LESS_OR_EQUAL)
