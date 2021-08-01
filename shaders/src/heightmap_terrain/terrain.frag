@@ -13,7 +13,7 @@ layout(location = 1) out vec4 outPosition;
 layout(location = 2) out vec4 outNormal;
 
 void main() {
-    outColor = vec4(fragNormal, 1.0);
+    outColor = texture(texSampler, fragTexCoord); //vec4(fragNormal, 1.0);
     outPosition = fragPosition;
-    outNormal = vec4(fragNormal, 1.0);
+    outNormal = vec4(-fragNormal, 1.0);
 }

@@ -48,7 +48,7 @@ impl TerrainRenderer {
                 .msaa(msaa_samples)
                 .color_attachment_count(color_attachment_count)
                 .with_depth_func(vk::CompareOp::LESS)
-                .cull_mode(vk::CullModeFlags::BACK)
+                .cull_mode(vk::CullModeFlags::FRONT)
                 .build()
         };
 

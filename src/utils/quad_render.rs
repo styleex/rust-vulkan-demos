@@ -48,6 +48,8 @@ impl QuadRenderer {
         let descriptor_set = DescriptorSetBuilder::new(
             env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_image(framebuffer.attachments.get(0).unwrap().view, sampler)
+            .add_image(framebuffer.attachments.get(1).unwrap().view, sampler)
+            .add_image(framebuffer.attachments.get(2).unwrap().view, sampler)
             .build();
 
         let second_buffer = Self::render_quad(&env, dimensions, &pipeline, &descriptor_set, render_pass);
@@ -148,6 +150,8 @@ impl QuadRenderer {
         self.descriptor_set = DescriptorSetBuilder::new(
             self.env.device(), self.pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_image(framebuffer.attachments.get(0).unwrap().view, self.sampler)
+            .add_image(framebuffer.attachments.get(1).unwrap().view, self.sampler)
+            .add_image(framebuffer.attachments.get(2).unwrap().view, self.sampler)
             .build();
 
         self.second_buffer = Self::render_quad(&self.env, dimensions, &self.pipeline, &self.descriptor_set, self.render_pass);

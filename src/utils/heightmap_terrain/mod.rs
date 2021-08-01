@@ -97,7 +97,7 @@ impl Vertex {
             vk::VertexInputAttributeDescription {
                 binding: 0,
                 location: 2,
-                format: vk::Format::R16G16_SFLOAT,
+                format: vk::Format::R32G32_SFLOAT,
                 offset: offset_of!(Self, texcoord) as u32,
             },
         ]
@@ -123,8 +123,15 @@ impl TerrainData {
         let mut indices = Vec::with_capacity((h * (w - 1) * 6) as usize);
 
         let get_pos = |x: i32, y: i32| -> Vector3<f32> {
-            let height = height_map.get_height(x, y);
-            Vector3::new((x as f32) * 0.1, height, -(y as f32) * 0.1)
+            let height = height_map.get_height(x, y) / 3.0;
+            let scale = 0.1 as f32;
+            let start_x = -(w as f32) / 2.0;
+            let start_y = -(h as f32) / 2.0;
+
+            let x = x as f32;
+            let y = y as f32;
+
+            Vector3::new((start_x + x) * scale, height, -(start_y + y) * scale)
         };
 
         for y in 0..(h as i32) {
