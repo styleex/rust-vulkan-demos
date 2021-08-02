@@ -96,7 +96,8 @@ impl DescriptorSetBuilder {
     }
 
     pub fn add_image(&mut self, image_view: vk::ImageView, sampler: vk::Sampler) -> &mut Self {
-        let desc = self.binding_desc.get(self.current_binding).unwrap();
+        let desc = self.binding_desc.get(self.current_binding).
+            expect(&format!("Shaders don't contains descriptor with index {}. Need to recompile shader?", self.current_binding));
 
         if ![vk::DescriptorType::SAMPLED_IMAGE, vk::DescriptorType::COMBINED_IMAGE_SAMPLER].contains(&desc.descriptor_type) {
             panic!("Invalid value for descriptor {}: expected {:?}, found image", desc.binding, desc.descriptor_type);

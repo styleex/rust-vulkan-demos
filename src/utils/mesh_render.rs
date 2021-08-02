@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
@@ -10,7 +9,6 @@ use crate::render_env::descriptor_set::DescriptorSet;
 use crate::render_env::env::RenderEnv;
 use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 use crate::render_env::shader;
-use crate::utils::texture::Texture;
 use crate::utils::uniform_buffer::UboBuffers;
 use crate::utils::mesh;
 use crate::utils::mesh::MeshVertexData;
@@ -18,11 +16,10 @@ use crate::utils::mesh::MeshVertexData;
 pub struct MeshRenderer {
     cmd_bufs: Vec<vk::CommandBuffer>,
 
-    vertex_buffer: MeshVertexData,
+    mesh: MeshVertexData,
 
     render_pass: vk::RenderPass,
     pipeline: Pipeline,
-    texture: Texture,
 
     descriptor_sets: Vec<DescriptorSet>,
     uniforms: UboBuffers,
@@ -51,14 +48,6 @@ impl MeshRenderer {
                 .build()
         };
 
-        let texture = Texture::new(
-            env.device().clone(),
-            env.command_pool(),
-            env.queue(),
-            &env.mem_properties,
-            Path::new("assets/chalet.jpg"),
-        );
-
         let uniforms = UboBuffers::new(
             env.instance(),
             env.device().clone(),
@@ -66,7 +55,7 @@ impl MeshRenderer {
             max_inflight_frames,
         );
 
-        let vertex_buffer = mesh::MeshVertexData::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
+        let mesh = mesh::MeshVertexData::create(env.clone());
 
         let mut cmd_bufs = vec![];
         let mut descriptor_sets = vec![];
@@ -74,11 +63,11 @@ impl MeshRenderer {
             descriptor_sets.push(
                 DescriptorSet::builder(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
                     .add_buffer(uniforms.uniform_buffers[i])
-                    .add_image(texture.texture_image_view, texture.texture_sampler)
+                    .add_image(mesh.texture.texture_image_view, mesh.texture.texture_sampler)
                     .build()
             );
             cmd_bufs.push(
-                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &vertex_buffer, dimensions)
+                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &mesh, dimensions)
             );
         }
 
@@ -86,11 +75,10 @@ impl MeshRenderer {
             env: env.clone(),
             pipeline,
             cmd_bufs,
-            texture,
             render_pass,
             uniforms,
             descriptor_sets,
-            vertex_buffer,
+            mesh: mesh,
             current_frame: 0,
             max_inflight_frames,
         }
@@ -187,7 +175,7 @@ impl MeshRenderer {
         for i in 0..self.max_inflight_frames {
             cmd_bufs.push(
                 Self::build_cmd_buf(&self.env, self.render_pass, &self.pipeline,
-                                    &self.descriptor_sets[i], &self.vertex_buffer, dimensions)
+                                    &self.descriptor_sets[i], &self.mesh, dimensions)
             );
         }
 

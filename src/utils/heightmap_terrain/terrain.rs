@@ -8,7 +8,7 @@ use memoffset::offset_of;
 
 use crate::render_env::env::RenderEnv;
 use crate::utils::buffer_utils::create_data_buffer;
-
+use crate::utils::texture::Texture;
 
 pub struct HeightMap {
     pub w: u32,
@@ -110,6 +110,8 @@ pub struct TerrainData {
     pub index_buffer: vk::Buffer,
     pub index_buffer_memory: vk::DeviceMemory,
     pub index_count: usize,
+
+    pub(super) texture: Texture,
 }
 
 impl TerrainData {
@@ -121,7 +123,7 @@ impl TerrainData {
         let mut indices = Vec::with_capacity((h * (w - 1) * 6) as usize);
 
         let get_pos = |x: i32, y: i32| -> Vector3<f32> {
-            let height = height_map.get_height(x, y) / 3.0;
+            let height = height_map.get_height(x, y);
             let scale = 0.1 as f32;
             let start_x = -(w as f32) / 2.0;
             let start_y = -(h as f32) / 2.0;
@@ -189,6 +191,14 @@ impl TerrainData {
             vk::BufferUsageFlags::INDEX_BUFFER,
             indices);
 
+        let texture = Texture::new(
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
+            &env.mem_properties,
+            Path::new("./assets/terrain/ground.png"),
+        );
+
         TerrainData {
             device: env.device().clone(),
             vertex_buffer,
@@ -198,6 +208,7 @@ impl TerrainData {
             index_buffer_memory,
 
             index_count,
+            texture,
         }
     }
 }

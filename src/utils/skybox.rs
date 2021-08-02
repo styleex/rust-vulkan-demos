@@ -3,6 +3,10 @@ use ash::vk;
 use memoffset::offset_of;
 
 use crate::utils::buffer_utils::create_data_buffer;
+use crate::utils::cube_texture::CubeTexture;
+use std::path::Path;
+use std::sync::Arc;
+use crate::render_env::env::RenderEnv;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -112,41 +116,45 @@ pub struct SkyboxVertexData {
     pub index_buffer: vk::Buffer,
     pub index_buffer_memory: vk::DeviceMemory,
     pub index_count: usize,
+
+    pub(super) texture: CubeTexture,
 }
 
 impl SkyboxVertexData {
-    pub fn create(
-        instance: &ash::Instance,
-        physical_device: vk::PhysicalDevice,
-        device: ash::Device,
-        command_pool: vk::CommandPool,
-        submit_queue: vk::Queue,
-    ) -> SkyboxVertexData
+    pub fn create(env: Arc<RenderEnv>) -> SkyboxVertexData
     {
         let (vertices, indices) = load_model();
 
         let index_count = indices.len();
 
         let (vertex_buffer, vertex_buffer_memory) = create_data_buffer(
-            instance,
-            physical_device,
-            device.clone(),
-            command_pool,
-            submit_queue,
+            env.instance(),
+            env.physical_device(),
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vertices);
 
         let (index_buffer, index_buffer_memory) = create_data_buffer(
-            instance,
-            physical_device,
-            device.clone(),
-            command_pool,
-            submit_queue,
+            env.instance(),
+            env.physical_device(),
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
             vk::BufferUsageFlags::INDEX_BUFFER,
             indices);
 
+        let texture = CubeTexture::new(
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
+            &env.mem_properties,
+            Path::new("./assets/skybox"),
+        );
+
         SkyboxVertexData {
-            device,
+            device: env.device().clone(),
 
             vertex_buffer,
             vertex_buffer_memory,
@@ -155,6 +163,7 @@ impl SkyboxVertexData {
             index_buffer_memory,
 
             index_count,
+            texture,
         }
     }
 }

@@ -1,12 +1,15 @@
 use std::path::Path;
 use std::time;
 
-use ash::version::{DeviceV1_0};
+use ash::version::DeviceV1_0;
 use ash::vk;
 use memoffset::offset_of;
 use tobj;
 
 use crate::utils::buffer_utils::create_data_buffer;
+use crate::utils::texture::Texture;
+use crate::render_env::env::RenderEnv;
+use std::sync::Arc;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -111,46 +114,48 @@ pub struct MeshVertexData {
     pub index_buffer: vk::Buffer,
     pub index_buffer_memory: vk::DeviceMemory,
     pub index_count: usize,
+
+    pub(super) texture: Texture,
 }
 
 impl MeshVertexData {
-    pub fn create(
-        instance: &ash::Instance,
-        physical_device: vk::PhysicalDevice,
-        device: ash::Device,
-        command_pool: vk::CommandPool,
-        submit_queue: vk::Queue,
-    ) -> MeshVertexData
+    pub fn create(env: Arc<RenderEnv>) -> MeshVertexData
     {
         let t1 = time::Instant::now();
         let (vertices, indices) = load_model(Path::new("assets/chalet2.obj"));
-        // let (vertices, indices) = (VERTICES_DATA.to_vec(), INDICES_DATA.to_vec());
         println!("Model loaded: {}", t1.elapsed().as_secs_f32());
 
         let index_count = indices.len();
 
         let (vertex_buffer, vertex_buffer_memory) = create_data_buffer(
-            instance,
-            physical_device,
-            device.clone(),
-            command_pool,
-            submit_queue,
+            env.instance(),
+            env.physical_device(),
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vertices);
 
         let (index_buffer, index_buffer_memory) = create_data_buffer(
-            instance,
-            physical_device,
-            device.clone(),
-            command_pool,
-            submit_queue,
+            env.instance(),
+            env.physical_device(),
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
             vk::BufferUsageFlags::INDEX_BUFFER,
             indices);
 
+        let texture = Texture::new(
+            env.device().clone(),
+            env.command_pool(),
+            env.queue(),
+            &env.mem_properties,
+            Path::new("assets/chalet.jpg"),
+        );
         println!("Model uploaded: {}", t1.elapsed().as_secs_f32());
 
         MeshVertexData {
-            device,
+            device: env.device().clone(),
 
             vertex_buffer,
             vertex_buffer_memory,
@@ -159,6 +164,8 @@ impl MeshVertexData {
             index_buffer_memory,
 
             index_count,
+
+            texture,
         }
     }
 }

@@ -43,7 +43,6 @@ struct HelloApplication {
     current_frame: usize,
     is_window_resized: bool,
 
-    msaa_samples: vk::SampleCountFlags,
     camera: camera::Camera,
 
     offscreen_buffer: frame_buffer::Framebuffer,
@@ -124,7 +123,7 @@ impl HelloApplication {
             dimensions,
         );
 
-        let height_map = HeightMap::from_png(Path::new("./assets/terrain/heightmap.png"));
+        let height_map = HeightMap::from_png(Path::new("./assets/terrain/heightmap2.png"));
         let terrain_data = TerrainData::new(env.clone(), height_map);
         let terrain_renderer = TerrainRenderer::new(env.clone(), offscreen_framebuffer.render_pass(),
         offscreen_framebuffer.attachments.len() - 1, terrain_data, msaa_samples, MAX_FRAMES_IN_FLIGHT, dimensions);
@@ -140,7 +139,6 @@ impl HelloApplication {
             sync,
             current_frame: 0,
             is_window_resized: false,
-            msaa_samples,
             camera,
 
             offscreen_buffer: offscreen_framebuffer,

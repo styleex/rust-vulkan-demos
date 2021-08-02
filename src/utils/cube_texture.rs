@@ -359,26 +359,6 @@ fn generate_mipmaps(
     buffer_utils::end_single_time_command(device, command_pool, submit_queue, command_buffer);
 }
 
-
-pub fn check_mipmap_support(
-    instance: &ash::Instance,
-    physcial_device: vk::PhysicalDevice,
-    image_format: vk::Format)
-{
-    let format_properties = unsafe {
-        instance.get_physical_device_format_properties(physcial_device, image_format)
-    };
-
-    let is_sample_image_filter_linear_support = format_properties
-        .optimal_tiling_features
-        .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR);
-
-    if is_sample_image_filter_linear_support == false {
-        panic!("Texture Image format does not support linear blitting!")
-    }
-}
-
-
 pub fn create_image(
     device: &ash::Device,
     width: u32,

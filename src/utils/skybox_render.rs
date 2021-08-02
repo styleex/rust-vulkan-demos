@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
@@ -13,17 +12,15 @@ use crate::render_env::shader;
 use crate::utils::uniform_buffer::UboBuffers;
 use crate::utils::{skybox};
 use crate::utils::skybox::SkyboxVertexData;
-use crate::utils::cube_texture::CubeTexture;
 
 
 pub struct SkyboxRenderer {
     cmd_bufs: Vec<vk::CommandBuffer>,
 
-    vertex_buffer: SkyboxVertexData,
+    skybox: SkyboxVertexData,
 
     render_pass: vk::RenderPass,
     pipeline: Pipeline,
-    texture: CubeTexture,
 
     descriptor_sets: Vec<DescriptorSet>,
     uniforms: UboBuffers,
@@ -53,14 +50,6 @@ impl SkyboxRenderer {
                 .build()
         };
 
-        let texture = CubeTexture::new(
-            env.device().clone(),
-            env.command_pool(),
-            env.queue(),
-            &env.mem_properties,
-            Path::new("assets/skybox"),
-        );
-
         let uniforms = UboBuffers::new(
             env.instance(),
             env.device().clone(),
@@ -68,7 +57,7 @@ impl SkyboxRenderer {
             max_inflight_frames,
         );
 
-        let vertex_buffer = skybox::SkyboxVertexData::create(env.instance(), env.physical_device(), env.device().clone(), env.command_pool(), env.queue());
+        let skybox_data = skybox::SkyboxVertexData::create(env.clone());
 
         let mut cmd_bufs = vec![];
         let mut descriptor_sets = vec![];
@@ -76,11 +65,11 @@ impl SkyboxRenderer {
             descriptor_sets.push(
                 DescriptorSet::builder(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
                     .add_buffer(uniforms.uniform_buffers[i])
-                    .add_image(texture.texture_image_view, texture.texture_sampler)
+                    .add_image(skybox_data.texture.texture_image_view, skybox_data.texture.texture_sampler)
                     .build()
             );
             cmd_bufs.push(
-                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &vertex_buffer, dimensions)
+                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &skybox_data, dimensions)
             );
         }
 
@@ -88,11 +77,10 @@ impl SkyboxRenderer {
             env: env.clone(),
             pipeline,
             cmd_bufs,
-            texture,
             render_pass,
             uniforms,
             descriptor_sets,
-            vertex_buffer,
+            skybox: skybox_data,
             current_frame: 0,
             max_inflight_frames,
         }
@@ -189,7 +177,7 @@ impl SkyboxRenderer {
         for i in 0..self.max_inflight_frames {
             cmd_bufs.push(
                 Self::build_cmd_buf(&self.env, self.render_pass, &self.pipeline,
-                                    &self.descriptor_sets[i], &self.vertex_buffer, dimensions)
+                                    &self.descriptor_sets[i], &self.skybox, dimensions)
             );
         }
 

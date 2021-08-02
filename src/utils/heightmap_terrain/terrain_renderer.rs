@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
@@ -10,7 +9,6 @@ use crate::render_env::descriptor_set::DescriptorSet;
 use crate::render_env::env::RenderEnv;
 use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 use crate::render_env::shader;
-use crate::utils::texture::Texture;
 use crate::utils::uniform_buffer::UboBuffers;
 
 use super::terrain::{TerrainData, Vertex};
@@ -22,7 +20,6 @@ pub struct TerrainRenderer {
 
     render_pass: vk::RenderPass,
     pipeline: Pipeline,
-    texture: Texture,
 
     descriptor_sets: Vec<DescriptorSet>,
     uniforms: UboBuffers,
@@ -52,14 +49,6 @@ impl TerrainRenderer {
                 .build()
         };
 
-        let texture = Texture::new(
-            env.device().clone(),
-            env.command_pool(),
-            env.queue(),
-            &env.mem_properties,
-            Path::new("./assets/terrain/ground.png"),
-        );
-
         let uniforms = UboBuffers::new(
             env.instance(),
             env.device().clone(),
@@ -73,7 +62,7 @@ impl TerrainRenderer {
             descriptor_sets.push(
                 DescriptorSet::builder(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
                     .add_buffer(uniforms.uniform_buffers[i])
-                    .add_image(texture.texture_image_view, texture.texture_sampler)
+                    .add_image(terrain.texture.texture_image_view, terrain.texture.texture_sampler)
                     .build()
             );
             cmd_bufs.push(
@@ -85,7 +74,6 @@ impl TerrainRenderer {
             env: env.clone(),
             pipeline,
             cmd_bufs,
-            texture,
             render_pass,
             uniforms,
             descriptor_sets,
