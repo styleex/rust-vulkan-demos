@@ -39,4 +39,4 @@ Plan:
 > 
 > ./compile_shaders.py
 > 
-> cargo run 
+> cargo run --package ash-test --bin ash-test
