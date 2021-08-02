@@ -3,7 +3,7 @@ use core::ptr;
 use ash::{RawPtr, vk};
 use ash::version::DeviceV1_0;
 
-use crate::render_env::shader;
+use crate::shader;
 
 pub struct DescriptorSet {
     device: ash::Device,

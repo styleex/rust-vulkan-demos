@@ -3,8 +3,8 @@ use std::ptr;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-use crate::render_env::shader::{DescriptorSetLayout, Shader};
-use crate::render_env::shader;
+use crate::shader::{DescriptorSetLayout, Shader};
+use crate::shader;
 
 pub struct Pipeline {
     pub device: ash::Device,

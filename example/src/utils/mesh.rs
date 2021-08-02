@@ -8,7 +8,7 @@ use tobj;
 
 use crate::utils::buffer_utils::create_data_buffer;
 use crate::utils::texture::Texture;
-use crate::render_env::env::RenderEnv;
+use ash_render_env::env::RenderEnv;
 use std::sync::Arc;
 
 #[repr(C)]

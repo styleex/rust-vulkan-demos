@@ -6,7 +6,7 @@ use crate::utils::buffer_utils::create_data_buffer;
 use crate::utils::cube_texture::CubeTexture;
 use std::path::Path;
 use std::sync::Arc;
-use crate::render_env::env::RenderEnv;
+use ash_render_env::env::RenderEnv;
 
 #[repr(C)]
 #[derive(Debug, Clone)]

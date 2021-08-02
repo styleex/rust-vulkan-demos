@@ -6,11 +6,11 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use egui::TextureId;
 
-use crate::render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
-use crate::render_env::egui::cpu_buffer::CpuBuffer;
-use crate::render_env::env::RenderEnv;
-use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
-use crate::render_env::shader::{Shader, ConstantsBuilder};
+use crate::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
+use crate::egui::cpu_buffer::CpuBuffer;
+use crate::env::RenderEnv;
+use crate::pipeline_builder::{Pipeline, PipelineBuilder};
+use crate::shader::{Shader, ConstantsBuilder};
 use crate::utils::texture::Texture;
 
 struct FontTexture(Texture, u64);

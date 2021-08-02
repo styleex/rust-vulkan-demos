@@ -1,7 +1,7 @@
 use ash::version::InstanceV1_0;
 use ash::vk;
 
-use super::env::RenderEnv;
+use crate::env::RenderEnv;
 use winit::dpi::PhysicalSize;
 
 pub fn get_max_usable_sample_count(env: &RenderEnv) -> vk::SampleCountFlags {

@@ -19,6 +19,7 @@ ASSET_GENERAL_TEXTURE_PATH = "./assets/texture.jpg"
 ASSET_CHALET_TEXTURE_PATH  = "./assets/chalet.jpg"
 ASSET_CHALET_OBJ_PATH  = "./assets/chalet.obj"
 
+
 def reporthook(blocknum, blocksize, totalsize):
     bytesread = blocknum * blocksize
     if totalsize > 0:

@@ -4,9 +4,9 @@ use std::sync::Arc;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-use crate::render_env::attachment_texture::AttachmentImage;
-use crate::render_env::env;
-use crate::render_env::utils::format_has_depth;
+use crate::attachment_texture::AttachmentImage;
+use crate::env;
+use crate::utils::format_has_depth;
 
 
 #[derive(Clone)]

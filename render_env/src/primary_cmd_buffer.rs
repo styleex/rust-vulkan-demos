@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-use crate::render_env::env::RenderEnv;
+use crate::env::RenderEnv;
 use std::ptr;
 
 pub struct PrimaryCommandBuffer {

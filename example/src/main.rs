@@ -9,9 +9,9 @@ use winit::platform::run_return::EventLoopExtRunReturn;
 
 use utils::{render_pass, sync};
 
-use crate::render_env::{env, frame_buffer};
-use crate::render_env::egui::Egui;
-use crate::render_env::primary_cmd_buffer::PrimaryCommandBuffer;
+use ash_render_env::{env, frame_buffer};
+use ash_render_env::egui::Egui;
+use ash_render_env::primary_cmd_buffer::PrimaryCommandBuffer;
 use crate::utils::mesh_render::MeshRenderer;
 use crate::utils::quad_render::QuadRenderer;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
@@ -23,7 +23,7 @@ use crate::utils::heightmap_terrain::terrain_renderer::TerrainRenderer;
 mod utils;
 mod camera;
 mod fps_limiter;
-mod render_env;
+use ash_render_env::env::RenderEnv;
 
 
 struct HelloApplication {
@@ -33,7 +33,7 @@ struct HelloApplication {
     geometry_pass_draw_command: PrimaryCommandBuffer,
 
     quad_renderer: QuadRenderer,
-    swapchain_stuff: render_env::swapchain::SwapChain,
+    swapchain_stuff: ash_render_env::swapchain::SwapChain,
 
     mesh_renderer: MeshRenderer,
     skybox_renderer: SkyboxRenderer,
@@ -59,9 +59,9 @@ impl HelloApplication {
     pub fn new(wnd: &winit::window::Window) -> HelloApplication {
         let env = Arc::new(env::RenderEnv::new(wnd));
 
-        let msaa_samples = render_env::utils::get_max_usable_sample_count(&env);
+        let msaa_samples = ash_render_env::utils::get_max_usable_sample_count(&env);
 
-        let mut swapchain_stuff = render_env::swapchain::SwapChain::new(&env, wnd.inner_size());
+        let mut swapchain_stuff = ash_render_env::swapchain::SwapChain::new(&env, wnd.inner_size());
 
         let quad_render_pass = render_pass::create_quad_render_pass(env.device(), swapchain_stuff.format);
         swapchain_stuff.create_framebuffers(env.device(), quad_render_pass);
@@ -388,7 +388,7 @@ impl HelloApplication {
         };
         self.cleanup_swapchain();
 
-        self.swapchain_stuff = render_env::swapchain::SwapChain::new(&self.env, wnd.inner_size());
+        self.swapchain_stuff = ash_render_env::swapchain::SwapChain::new(&self.env, wnd.inner_size());
         self.swapchain_stuff.create_framebuffers(self.env.device(), self.final_render_pass);
 
         let dimensions = [self.swapchain_stuff.size.width, self.swapchain_stuff.size.height];

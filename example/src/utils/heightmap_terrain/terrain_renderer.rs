@@ -5,10 +5,10 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use cgmath::{Matrix4, SquareMatrix};
 
-use crate::render_env::descriptor_set::DescriptorSet;
-use crate::render_env::env::RenderEnv;
-use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
-use crate::render_env::shader;
+use ash_render_env::descriptor_set::DescriptorSet;
+use ash_render_env::env::RenderEnv;
+use ash_render_env::pipeline_builder::{Pipeline, PipelineBuilder};
+use ash_render_env::shader;
 use crate::utils::uniform_buffer::UboBuffers;
 
 use super::terrain::{TerrainData, Vertex};

@@ -7,9 +7,9 @@ use winit::event::{WindowEvent};
 
 pub use winit_input::egui_to_winit_cursor_icon;
 
-use crate::render_env::egui::renderer::EguiRenderer;
-use crate::render_env::egui::winit_input::WinitInput;
-use crate::render_env::env::RenderEnv;
+use crate::egui::renderer::EguiRenderer;
+use crate::egui::winit_input::WinitInput;
+use crate::env::RenderEnv;
 
 mod cpu_buffer;
 mod winit_input;

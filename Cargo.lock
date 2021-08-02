@@ -73,7 +73,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-test"
+name = "ash-render-env"
 version = "0.1.0"
 dependencies = [
  "ash",
@@ -85,6 +85,22 @@ dependencies = [
  "metal",
  "num",
  "objc",
+ "spirv-reflect",
+ "tobj",
+ "winit",
+]
+
+[[package]]
+name = "ash-test"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "ash-render-env",
+ "cgmath",
+ "egui",
+ "image",
+ "memoffset",
+ "num",
  "spirv-reflect",
  "tobj",
  "winit",

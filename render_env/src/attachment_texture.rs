@@ -3,8 +3,8 @@ use std::ptr;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-use crate::render_env::env::RenderEnv;
-use crate::render_env::utils::format_has_depth;
+use crate::env::RenderEnv;
+use crate::utils::format_has_depth;
 
 pub struct AttachmentImage {
     device: ash::Device,

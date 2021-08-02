@@ -3,21 +3,20 @@ use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use cgmath::{Matrix4, SquareMatrix};
+use cgmath::{Matrix4, Deg, Rad, Vector3};
 
-use crate::render_env::descriptor_set::DescriptorSet;
-use crate::render_env::env::RenderEnv;
-use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
-use crate::render_env::shader;
+use ash_render_env::descriptor_set::DescriptorSet;
+use ash_render_env::env::RenderEnv;
+use ash_render_env::pipeline_builder::{Pipeline, PipelineBuilder};
+use ash_render_env::shader;
 use crate::utils::uniform_buffer::UboBuffers;
-use crate::utils::{skybox};
-use crate::utils::skybox::SkyboxVertexData;
+use crate::utils::mesh;
+use crate::utils::mesh::MeshVertexData;
 
-
-pub struct SkyboxRenderer {
+pub struct MeshRenderer {
     cmd_bufs: Vec<vk::CommandBuffer>,
 
-    skybox: SkyboxVertexData,
+    mesh: MeshVertexData,
 
     render_pass: vk::RenderPass,
     pipeline: Pipeline,
@@ -30,23 +29,22 @@ pub struct SkyboxRenderer {
     max_inflight_frames: usize,
 }
 
-impl SkyboxRenderer {
+impl MeshRenderer {
     pub fn new(env: Arc<RenderEnv>, render_pass: vk::RenderPass, color_attachment_count: usize,
                msaa_samples: vk::SampleCountFlags, max_inflight_frames: usize,
-               dimensions: [u32; 2]) -> SkyboxRenderer
+               dimensions: [u32; 2]) -> MeshRenderer
     {
         let pipeline = {
-            let vert_shader_module = shader::Shader::load(env.device(), "shaders/spv/skybox.vert.spv");
-            let frag_shader_module = shader::Shader::load(env.device(), "shaders/spv/skybox.frag.spv");
+            let vert_shader_module = shader::Shader::load(env.device(), "shaders/spv/mesh.vert.spv");
+            let frag_shader_module = shader::Shader::load(env.device(), "shaders/spv/mesh.frag.spv");
 
             PipelineBuilder::new(env.device().clone(), render_pass, 0)
                 .vertex_shader(vert_shader_module)
                 .fragment_shader(frag_shader_module)
-                .vertex_input(skybox::SkyboxVertex::binding_descriptions(), skybox::SkyboxVertex::attribute_descriptions())
+                .vertex_input(mesh::Vertex::binding_descriptions(), mesh::Vertex::attribute_descriptions())
                 .msaa(msaa_samples)
+                .with_depth_test()
                 .color_attachment_count(color_attachment_count)
-                .with_depth_func(vk::CompareOp::LESS_OR_EQUAL)
-                .cull_mode(vk::CullModeFlags::BACK)
                 .build()
         };
 
@@ -57,7 +55,7 @@ impl SkyboxRenderer {
             max_inflight_frames,
         );
 
-        let skybox_data = skybox::SkyboxVertexData::create(env.clone());
+        let mesh = mesh::MeshVertexData::create(env.clone());
 
         let mut cmd_bufs = vec![];
         let mut descriptor_sets = vec![];
@@ -65,28 +63,28 @@ impl SkyboxRenderer {
             descriptor_sets.push(
                 DescriptorSet::builder(env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
                     .add_buffer(uniforms.uniform_buffers[i])
-                    .add_image(skybox_data.texture.texture_image_view, skybox_data.texture.texture_sampler)
+                    .add_image(mesh.texture.texture_image_view, mesh.texture.texture_sampler)
                     .build()
             );
             cmd_bufs.push(
-                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &skybox_data, dimensions)
+                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &mesh, dimensions)
             );
         }
 
-        SkyboxRenderer {
+        MeshRenderer {
             env: env.clone(),
             pipeline,
             cmd_bufs,
             render_pass,
             uniforms,
             descriptor_sets,
-            skybox: skybox_data,
+            mesh,
             current_frame: 0,
             max_inflight_frames,
         }
     }
 
-    fn build_cmd_buf(env: &RenderEnv, render_pass: vk::RenderPass, pipeline: &Pipeline, descriptor_set: &DescriptorSet, vertex_buffer: &SkyboxVertexData, dimensions: [u32; 2]) -> vk::CommandBuffer {
+    fn build_cmd_buf(env: &RenderEnv, render_pass: vk::RenderPass, pipeline: &Pipeline, descriptor_set: &DescriptorSet, vertex_buffer: &MeshVertexData, dimensions: [u32; 2]) -> vk::CommandBuffer {
         let command_buffer = env.create_secondary_command_buffer();
         let device = env.device();
 
@@ -177,16 +175,18 @@ impl SkyboxRenderer {
         for i in 0..self.max_inflight_frames {
             cmd_bufs.push(
                 Self::build_cmd_buf(&self.env, self.render_pass, &self.pipeline,
-                                    &self.descriptor_sets[i], &self.skybox, dimensions)
+                                    &self.descriptor_sets[i], &self.mesh, dimensions)
             );
         }
 
         self.cmd_bufs = cmd_bufs;
     }
 
-    pub fn draw(&mut self, view: Matrix4<f32>, proj: Matrix4<f32>) -> vk::CommandBuffer
-    {
-        self.uniforms.update_uniform_buffer(self.current_frame, Matrix4::identity(), view, proj);
+    pub fn draw(&mut self, view: Matrix4<f32>, proj: Matrix4<f32>) -> vk::CommandBuffer {
+        let w1 = Matrix4::<f32>::from_angle_x(Rad::from(Deg(90.0)));
+        let world = Matrix4::<f32>::from_translation(Vector3::new(0.0, 0.01, -10.0 )) * w1;
+
+        self.uniforms.update_uniform_buffer(self.current_frame, world, view, proj);
 
         let current_frame = self.current_frame;
         self.current_frame = (self.current_frame + 1) % self.max_inflight_frames;
@@ -195,7 +195,7 @@ impl SkyboxRenderer {
     }
 }
 
-impl Drop for SkyboxRenderer {
+impl Drop for MeshRenderer {
     fn drop(&mut self) {
         unsafe {
             if self.cmd_bufs.len() > 0 {

@@ -4,11 +4,11 @@ use std::sync::Arc;
 use ash::version::DeviceV1_0;
 use ash::vk;
 
-use crate::render_env::{descriptor_set, pipeline_builder, shader};
-use crate::render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
-use crate::render_env::env::RenderEnv;
-use crate::render_env::frame_buffer::Framebuffer;
-use crate::render_env::pipeline_builder::{Pipeline, PipelineBuilder};
+use ash_render_env::{descriptor_set, pipeline_builder, shader};
+use ash_render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
+use ash_render_env::env::RenderEnv;
+use ash_render_env::frame_buffer::Framebuffer;
+use ash_render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 
 pub struct QuadRenderer {
     sampler: vk::Sampler,
