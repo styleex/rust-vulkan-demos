@@ -292,6 +292,9 @@ impl HelloApplication {
             &[self.quad_renderer.second_buffer, gui_render_op],
         );
 
+        let mrt_pass = [geometry_pass_cmd];
+        let composite_pass = [quad_cmd_buf];
+
         let submit_infos = [
             vk::SubmitInfo {
                 s_type: vk::StructureType::SUBMIT_INFO,
@@ -300,7 +303,7 @@ impl HelloApplication {
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [geometry_pass_cmd].as_ptr(),
+                p_command_buffers: mrt_pass.as_ptr(),
                 signal_semaphore_count: first_pass_finished.len() as u32,
                 p_signal_semaphores: first_pass_finished.as_ptr(),
             },
@@ -311,7 +314,7 @@ impl HelloApplication {
                 p_wait_semaphores: first_pass_finished.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: [quad_cmd_buf].as_ptr(),
+                p_command_buffers: composite_pass.as_ptr(),
                 signal_semaphore_count: second_pass_finished.len() as u32,
                 p_signal_semaphores: second_pass_finished.as_ptr(),
             },
