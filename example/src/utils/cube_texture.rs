@@ -3,8 +3,7 @@ use std::path::Path;
 use ash::version::{DeviceV1_0};
 use ash::vk;
 use image::GenericImageView;
-
-use crate::utils::texture_utils::{create_image_view, create_texture_image, create_texture_sampler};
+use ash_render_env::utils::texture_utils::{create_texture_image, create_image_view, create_texture_sampler};
 
 
 #[allow(dead_code)]

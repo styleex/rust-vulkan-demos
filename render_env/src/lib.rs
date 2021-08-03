@@ -15,3 +15,5 @@ pub mod pipeline_builder;
 pub mod egui;
 pub mod primary_cmd_buffer;
 pub mod utils;
+pub mod camera;
+pub mod fps_limiter;

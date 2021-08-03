@@ -7,8 +7,8 @@ use cgmath::{InnerSpace, Vector3};
 use memoffset::offset_of;
 
 use ash_render_env::env::RenderEnv;
-use crate::utils::buffer_utils::create_data_buffer;
-use crate::utils::texture::Texture;
+use ash_render_env::utils::texture::Texture;
+use ash_render_env::utils::buffer_utils::create_data_buffer;
 
 pub struct HeightMap {
     pub w: u32,

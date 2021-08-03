@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 use std::time;
 
 use ash::version::DeviceV1_0;
@@ -6,10 +7,9 @@ use ash::vk;
 use memoffset::offset_of;
 use tobj;
 
-use crate::utils::buffer_utils::create_data_buffer;
-use crate::utils::texture::Texture;
 use ash_render_env::env::RenderEnv;
-use std::sync::Arc;
+use ash_render_env::utils::buffer_utils::create_data_buffer;
+use ash_render_env::utils::texture::Texture;
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -145,6 +145,8 @@ impl MeshVertexData {
             vk::BufferUsageFlags::INDEX_BUFFER,
             indices);
 
+        println!("Model uploaded: {}", t1.elapsed().as_secs_f32());
+
         let texture = Texture::new(
             env.device().clone(),
             env.command_pool(),
@@ -152,8 +154,6 @@ impl MeshVertexData {
             &env.mem_properties,
             Path::new("assets/chalet.jpg"),
         );
-        println!("Model uploaded: {}", t1.elapsed().as_secs_f32());
-
         MeshVertexData {
             device: env.device().clone(),
 

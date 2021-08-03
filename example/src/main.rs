@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
@@ -7,24 +8,22 @@ use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
 
+use ash_render_env::{env, frame_buffer};
+use ash_render_env::camera::Camera;
+use ash_render_env::egui::Egui;
+use ash_render_env::env::RenderEnv;
+use ash_render_env::fps_limiter::FPSLimiter;
+use ash_render_env::primary_cmd_buffer::PrimaryCommandBuffer;
 use utils::{render_pass, sync};
 
-use ash_render_env::{env, frame_buffer};
-use ash_render_env::egui::Egui;
-use ash_render_env::primary_cmd_buffer::PrimaryCommandBuffer;
+use crate::utils::heightmap_terrain::terrain::{HeightMap, TerrainData};
+use crate::utils::heightmap_terrain::terrain_renderer::TerrainRenderer;
 use crate::utils::mesh_render::MeshRenderer;
 use crate::utils::quad_render::QuadRenderer;
-use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 use crate::utils::skybox_render::SkyboxRenderer;
-use crate::utils::heightmap_terrain::terrain::{HeightMap, TerrainData};
-use std::path::Path;
-use crate::utils::heightmap_terrain::terrain_renderer::TerrainRenderer;
+use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 
 mod utils;
-mod camera;
-mod fps_limiter;
-use ash_render_env::env::RenderEnv;
-
 
 struct HelloApplication {
     egui: Egui,
@@ -43,7 +42,7 @@ struct HelloApplication {
     current_frame: usize,
     is_window_resized: bool,
 
-    camera: camera::Camera,
+    camera: Camera,
 
     offscreen_buffer: frame_buffer::Framebuffer,
 
@@ -53,6 +52,7 @@ struct HelloApplication {
     env: Arc<env::RenderEnv>,
 
     clear_color: [f32; 3],
+    tick_counter: FPSLimiter,
 }
 
 impl HelloApplication {
@@ -66,7 +66,7 @@ impl HelloApplication {
         let quad_render_pass = render_pass::create_quad_render_pass(env.device(), swapchain_stuff.format);
         swapchain_stuff.create_framebuffers(env.device(), quad_render_pass);
 
-        let mut camera = camera::Camera::new();
+        let mut camera = Camera::new();
         camera.set_viewport(
             swapchain_stuff.size.width,
             swapchain_stuff.size.height,
@@ -126,8 +126,10 @@ impl HelloApplication {
         let height_map = HeightMap::from_png(Path::new("./assets/terrain/heightmap2.png"));
         let terrain_data = TerrainData::new(env.clone(), height_map);
         let terrain_renderer = TerrainRenderer::new(env.clone(), offscreen_framebuffer.render_pass(),
-        offscreen_framebuffer.attachments.len() - 1, terrain_data, msaa_samples, MAX_FRAMES_IN_FLIGHT, dimensions);
+                                                    offscreen_framebuffer.attachments.len() - 1, terrain_data, msaa_samples, MAX_FRAMES_IN_FLIGHT, dimensions);
         println!("created");
+
+        let tick_counter = FPSLimiter::new();
 
         HelloApplication {
             env,
@@ -150,13 +152,13 @@ impl HelloApplication {
 
             mesh_renderer,
             skybox_renderer,
-            terrain_renderer
+            terrain_renderer,
+
+            tick_counter,
         }
     }
 
     pub fn run(&mut self, mut event_loop: EventLoop<()>, wnd: winit::window::Window) {
-        let mut tick_counter = fps_limiter::FPSLimiter::new();
-
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
@@ -195,9 +197,6 @@ impl HelloApplication {
                 }
                 Event::RedrawRequested(_) => {
                     self.draw_frame(&wnd);
-
-                    // print!("FPS: {}\r", tick_counter.fps());
-                    tick_counter.tick_frame();
                 }
                 // Important!
                 Event::LoopDestroyed => {
@@ -378,7 +377,8 @@ impl HelloApplication {
             ui.separator();
 
             let camera_pos = self.camera.position();
-            ui.label(format!("X: {}, Y: {}, Z: {}", camera_pos.x, camera_pos.y, camera_pos.z));
+            ui.label(format!("X: {:.2}, Y: {:.2}, Z: {:.2}", camera_pos.x, camera_pos.y, camera_pos.z));
+            ui.label(format!("FPS: {:.2}", self.tick_counter.fps()));
             // ui.image(egui::TextureId::User(0), [300.0, 200.0]);
         });
     }

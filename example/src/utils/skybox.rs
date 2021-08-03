@@ -2,11 +2,11 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use memoffset::offset_of;
 
-use crate::utils::buffer_utils::create_data_buffer;
 use crate::utils::cube_texture::CubeTexture;
 use std::path::Path;
 use std::sync::Arc;
 use ash_render_env::env::RenderEnv;
+use ash_render_env::utils::buffer_utils::create_data_buffer;
 
 #[repr(C)]
 #[derive(Debug, Clone)]

@@ -4,6 +4,11 @@ members = [
     "example"
 ]
 
+# If setting
+#   [profile.dev.package."*"]
+#   opt-level = 3
+# program in debug mode is segfaulted.
+
 [profile.dev.package.image]
 opt-level = 3
 
@@ -21,6 +26,16 @@ opt-level = 3
 
 [profile.dev.package.winit]
 opt-level = 3
+
+[profile.dev.package.ash]
+opt-level = 3
+
+[profile.dev.package.egui]
+opt-level = 3
+
+[profile.dev.package.memoffset]
+opt-level = 3
+
 
 [profile.dev]
 opt-level = 1

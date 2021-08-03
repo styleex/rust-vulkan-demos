@@ -1,8 +1,7 @@
 use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::vk;
 use cgmath::Matrix4;
-
-use crate::utils::buffer_utils;
+use ash_render_env::utils::buffer_utils::create_buffer;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -35,7 +34,7 @@ impl UboBuffers {
             unsafe { instance.get_physical_device_memory_properties(physical_device) };
 
         for _ in 0..swapchain_image_count {
-            let (uniform_buffer, uniform_buffer_memory) = buffer_utils::create_buffer(
+            let (uniform_buffer, uniform_buffer_memory) = create_buffer(
                 &device,
                 buffer_size as u64,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
