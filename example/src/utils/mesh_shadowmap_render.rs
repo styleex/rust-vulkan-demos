@@ -14,6 +14,7 @@ use crate::shadow_map::uniform_buffer::{ShadowMapData, UniformBuffer};
 use crate::utils::mesh;
 use crate::utils::mesh::Mesh;
 use crate::utils::uniform_buffer::UboBuffers;
+use ash_render_env::camera::Camera;
 
 pub struct MeshShadowMapRenderer {
     render_cmds: Vec<vk::CommandBuffer>,
@@ -46,6 +47,7 @@ impl MeshShadowMapRenderer {
                 .fragment_shader(frag_shader_module)
                 .vertex_input(mesh::Vertex::binding_descriptions(), mesh::Vertex::attribute_descriptions())
                 .with_depth_test()
+                .color_attachment_count(0)
                 .build()
         };
 
@@ -63,7 +65,7 @@ impl MeshShadowMapRenderer {
             );
             descriptor_sets2.push(
                 DescriptorSet::builder(env.device(), pipeline.descriptor_set_layouts.get(1).unwrap())
-                    .add_image_with_layout(depth_buffer, sampler, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .add_image_with_layout(depth_buffer, sampler, vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)
                     .build()
             );
 
@@ -186,24 +188,22 @@ impl MeshShadowMapRenderer {
         self.render_cmds = cmd_bufs;
     }
 
-    pub fn draw(&mut self) -> vk::CommandBuffer {
+       pub fn draw(&mut self, camera: &Camera) -> vk::CommandBuffer {
         let current_frame = self.current_frame;
         self.current_frame = (self.current_frame + 1) % self.max_inflight_frames;
 
-        let view = Matrix4::<f32>::look_at_rh(
-            Point3::new(0.0, -30.0, 0.0),
-            Point3::new(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 1.0, 0.0),
-        );
+        let view = camera.view_matrix();
         let proj = cgmath::perspective(
             Rad::from(Deg(45.0)),
             4096 as f32 / 4096 as f32,
             0.01,
             100.0,
         );
+        let w1 = Matrix4::<f32>::from_angle_x(Rad::from(Deg(90.0)));
+        let world = Matrix4::<f32>::from_translation(Vector3::new(0.0, 0.01, -10.0 )) * w1;
 
         self.uniforms[current_frame].write_data(ShadowMapData {
-            light_wp: view * proj,
+            light_wp: proj *view * world,
         });
 
         self.render_cmds[current_frame]

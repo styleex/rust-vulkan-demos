@@ -148,7 +148,8 @@ impl HelloApplication {
         let shadow_map_fb = ShadowMapFramebuffer::new(env.clone());
         egui.register_texture(1, shadow_map_fb.get_cascade_view(0), false);
 
-        let shadowmap_pass_draw_command = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+        let mut shadowmap_pass_draw_command = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+        shadowmap_pass_draw_command.set_dimensions([4096 as u32, 4096 as u32]);
 
         let mesh_shadow_map_renderer = MeshShadowMapRenderer::new(
             env.clone(),
@@ -305,7 +306,7 @@ impl HelloApplication {
                 stencil: 0,
             }
         }];
-        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw();
+        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw(&self.camera);
         let shadowmap_pass_cmd = self.shadowmap_pass_draw_command.execute_secondary(
             shadow_map_clear,
             self.shadow_map_fb.frambuffer(0),
@@ -352,7 +353,7 @@ impl HelloApplication {
                 wait_semaphore_count: wait_semaphores.len() as u32,
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
-                command_buffer_count: 1,
+                command_buffer_count: mrt_pass.len() as u32,
                 p_command_buffers: mrt_pass.as_ptr(),
                 signal_semaphore_count: first_pass_finished.len() as u32,
                 p_signal_semaphores: first_pass_finished.as_ptr(),
@@ -430,7 +431,7 @@ impl HelloApplication {
             let camera_pos = self.camera.position();
             ui.label(format!("X: {:.2}, Y: {:.2}, Z: {:.2}", camera_pos.x, camera_pos.y, camera_pos.z));
             ui.label(format!("FPS: {:.2}", self.tick_counter.fps()));
-            // ui.image(egui::TextureId::User(1), [200.0, 200.0]);
+            ui.image(egui::TextureId::User(1), [200.0, 200.0]);
         });
     }
 

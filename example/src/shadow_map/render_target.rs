@@ -41,7 +41,7 @@ pub struct ShadowMapFramebuffer {
 impl ShadowMapFramebuffer {
     pub fn new(env: Arc<RenderEnv>) -> ShadowMapFramebuffer {
         let (cascade_width, cascade_height) = (4096 as u32, 4096 as u32);
-        let depth_format = vk::Format::D32_SFLOAT;
+        let depth_format = vk::Format::D16_UNORM;
         let render_pass = create_render_pass(env.device(), depth_format);
 
 
@@ -135,7 +135,7 @@ impl ShadowMapFramebuffer {
                 s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::ImageViewCreateFlags::empty(),
-                view_type: vk::ImageViewType::TYPE_2D,
+                view_type: vk::ImageViewType::TYPE_2D_ARRAY,
                 format: depth_format,
                 components: vk::ComponentMapping {
                     r: vk::ComponentSwizzle::IDENTITY,
@@ -230,7 +230,7 @@ fn create_render_pass(device: &ash::Device, depth_format: vk::Format) -> vk::Ren
         stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
         stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
         initial_layout: vk::ImageLayout::UNDEFINED,
-        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        final_layout: vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
     }];
 
     let depth_attachment_ref = vk::AttachmentReference {
