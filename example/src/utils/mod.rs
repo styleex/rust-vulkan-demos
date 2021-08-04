@@ -8,3 +8,4 @@ pub mod skybox;
 pub mod skybox_render;
 pub mod cube_texture;
 pub mod heightmap_terrain;
+pub mod mesh_shadowmap_render;

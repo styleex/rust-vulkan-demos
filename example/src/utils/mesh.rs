@@ -106,7 +106,7 @@ fn load_model(model_path: &Path) -> (Vec<Vertex>, Vec<u32>) {
     (vertices, indices)
 }
 
-pub struct MeshVertexData {
+pub struct Mesh {
     device: ash::Device,
     pub vertex_buffer: vk::Buffer,
     pub vertex_buffer_memory: vk::DeviceMemory,
@@ -118,11 +118,11 @@ pub struct MeshVertexData {
     pub(super) texture: Texture,
 }
 
-impl MeshVertexData {
-    pub fn create(env: Arc<RenderEnv>) -> MeshVertexData
+impl Mesh {
+    pub fn load_from_file(env: Arc<RenderEnv>, path: &Path) -> Mesh
     {
         let t1 = time::Instant::now();
-        let (vertices, indices) = load_model(Path::new("assets/chalet2.obj"));
+        let (vertices, indices) = load_model(path);
         println!("Model loaded: {}", t1.elapsed().as_secs_f32());
 
         let index_count = indices.len();
@@ -154,7 +154,7 @@ impl MeshVertexData {
             &env.mem_properties,
             Path::new("assets/chalet.jpg"),
         );
-        MeshVertexData {
+        Mesh {
             device: env.device().clone(),
 
             vertex_buffer,
@@ -170,7 +170,7 @@ impl MeshVertexData {
     }
 }
 
-impl Drop for MeshVertexData {
+impl Drop for Mesh {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_buffer(self.index_buffer, None);

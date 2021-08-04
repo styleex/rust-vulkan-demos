@@ -16,6 +16,7 @@ impl DescriptorSet {
         DescriptorSetBuilder::new(device, layout)
     }
 }
+
 impl Drop for DescriptorSet {
     fn drop(&mut self) {
         unsafe {
@@ -115,6 +116,28 @@ impl DescriptorSetBuilder {
 
         self
     }
+
+    pub fn add_image_with_layout(&mut self, image_view: vk::ImageView, sampler: vk::Sampler, image_layout: vk::ImageLayout) -> &mut Self {
+        let desc = self.binding_desc.get(self.current_binding).
+            expect(&format!("Shaders don't contains descriptor with index {}. Need to recompile shader?", self.current_binding));
+
+        if ![vk::DescriptorType::SAMPLED_IMAGE, vk::DescriptorType::COMBINED_IMAGE_SAMPLER].contains(&desc.descriptor_type) {
+            panic!("Invalid value for descriptor {}: expected {:?}, found image", desc.binding, desc.descriptor_type);
+        }
+
+        self.image_writes.push(
+            vk::DescriptorImageInfo {
+                sampler,
+                image_view,
+                image_layout,
+            }
+        );
+
+        self.current_binding += 1;
+
+        self
+    }
+
 
     pub fn build(&self) -> DescriptorSet {
         let layouts = [self.layout];

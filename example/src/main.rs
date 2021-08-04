@@ -16,25 +16,33 @@ use ash_render_env::fps_limiter::FPSLimiter;
 use ash_render_env::primary_cmd_buffer::PrimaryCommandBuffer;
 use utils::{render_pass, sync};
 
+use crate::shadow_map::ShadowMapFramebuffer;
 use crate::utils::heightmap_terrain::terrain::{HeightMap, TerrainData};
 use crate::utils::heightmap_terrain::terrain_renderer::TerrainRenderer;
+use crate::utils::mesh::Mesh;
 use crate::utils::mesh_render::MeshRenderer;
+use crate::utils::mesh_shadowmap_render::MeshShadowMapRenderer;
 use crate::utils::quad_render::QuadRenderer;
 use crate::utils::skybox_render::SkyboxRenderer;
 use crate::utils::sync::MAX_FRAMES_IN_FLIGHT;
 
 mod utils;
+mod shadow_map;
 
 struct HelloApplication {
     egui: Egui,
 
     final_pass_draw_command: PrimaryCommandBuffer,
     geometry_pass_draw_command: PrimaryCommandBuffer,
+    shadowmap_pass_draw_command: PrimaryCommandBuffer,
 
     quad_renderer: QuadRenderer,
     swapchain_stuff: ash_render_env::swapchain::SwapChain,
 
+    mesh: Arc<Mesh>,
     mesh_renderer: MeshRenderer,
+    mesh_shadow_map_renderer: MeshShadowMapRenderer,
+
     skybox_renderer: SkyboxRenderer,
 
     sync: sync::SyncObjects,
@@ -49,10 +57,13 @@ struct HelloApplication {
     terrain_renderer: TerrainRenderer,
 
     final_render_pass: vk::RenderPass,
-    env: Arc<env::RenderEnv>,
 
     clear_color: [f32; 3],
     tick_counter: FPSLimiter,
+
+    shadow_map_fb: ShadowMapFramebuffer,
+
+    env: Arc<env::RenderEnv>,
 }
 
 impl HelloApplication {
@@ -105,9 +116,14 @@ impl HelloApplication {
         let mut quad_render_system = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
         quad_render_system.set_dimensions(dimensions);
 
+        let mesh = Arc::new(
+            Mesh::load_from_file(env.clone(), Path::new("assets/chalet2.obj"))
+        );
+
         let mesh_renderer = MeshRenderer::new(
             env.clone(),
             offscreen_framebuffer.render_pass(),
+            mesh.clone(),
             offscreen_framebuffer.attachments.len() - 1, // color attachments only
             msaa_samples,
             MAX_FRAMES_IN_FLIGHT,
@@ -127,14 +143,32 @@ impl HelloApplication {
         let terrain_data = TerrainData::new(env.clone(), height_map);
         let terrain_renderer = TerrainRenderer::new(env.clone(), offscreen_framebuffer.render_pass(),
                                                     offscreen_framebuffer.attachments.len() - 1, terrain_data, msaa_samples, MAX_FRAMES_IN_FLIGHT, dimensions);
+
+
+        let shadow_map_fb = ShadowMapFramebuffer::new(env.clone());
+        egui.register_texture(1, shadow_map_fb.get_cascade_view(0), false);
+
+        let shadowmap_pass_draw_command = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+
+        let mesh_shadow_map_renderer = MeshShadowMapRenderer::new(
+            env.clone(),
+            shadow_map_fb.render_pass(),
+            mesh.clone(),
+            shadow_map_fb.get_cascade_view(0),
+            MAX_FRAMES_IN_FLIGHT,
+            [4096, 4096],
+        );
+
         println!("created");
 
         let tick_counter = FPSLimiter::new();
-
         HelloApplication {
             env,
+            shadow_map_fb,
             final_pass_draw_command: quad_render_system,
             geometry_pass_draw_command: draw_mesh_render_system,
+            shadowmap_pass_draw_command,
+
             quad_renderer,
             swapchain_stuff,
 
@@ -150,7 +184,10 @@ impl HelloApplication {
             clear_color: [0.0, 0.0, 0.0],
             final_render_pass: quad_render_pass,
 
+            mesh,
             mesh_renderer,
+            mesh_shadow_map_renderer,
+
             skybox_renderer,
             terrain_renderer,
 
@@ -262,6 +299,20 @@ impl HelloApplication {
             },
         ];
 
+        let shadow_map_clear = vec![vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            }
+        }];
+        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw();
+        let shadowmap_pass_cmd = self.shadowmap_pass_draw_command.execute_secondary(
+            shadow_map_clear,
+            self.shadow_map_fb.frambuffer(0),
+            self.shadow_map_fb.render_pass(),
+            &[mesh_shadowmap_draw]
+        );
+
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let terrain_draw = self.terrain_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let skybox_draw = self.skybox_renderer.draw(self.camera.skybox_view_matrix(), self.camera.proj_matrix());
@@ -291,7 +342,7 @@ impl HelloApplication {
             &[self.quad_renderer.second_buffer, gui_render_op],
         );
 
-        let mrt_pass = [geometry_pass_cmd];
+        let mrt_pass = [geometry_pass_cmd, shadowmap_pass_cmd];
         let composite_pass = [quad_cmd_buf];
 
         let submit_infos = [
@@ -379,7 +430,7 @@ impl HelloApplication {
             let camera_pos = self.camera.position();
             ui.label(format!("X: {:.2}, Y: {:.2}, Z: {:.2}", camera_pos.x, camera_pos.y, camera_pos.z));
             ui.label(format!("FPS: {:.2}", self.tick_counter.fps()));
-            // ui.image(egui::TextureId::User(0), [300.0, 200.0]);
+            // ui.image(egui::TextureId::User(1), [200.0, 200.0]);
         });
     }
 

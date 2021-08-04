@@ -230,7 +230,7 @@ impl RenderEnv {
         }
     }
 
-    pub(crate) fn find_memory_type(&self, type_filter: u32, required_properties: vk::MemoryPropertyFlags) -> u32 {
+    pub fn find_memory_type(&self, type_filter: u32, required_properties: vk::MemoryPropertyFlags) -> u32 {
         for (i, memory_type) in self.mem_properties.memory_types.iter().enumerate() {
             if (type_filter & (1 << i)) > 0
                 && memory_type.property_flags.contains(required_properties)
