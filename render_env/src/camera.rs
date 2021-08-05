@@ -1,7 +1,8 @@
-use cgmath::{Deg, Matrix4, Point3, SquareMatrix, vec3, Vector3, EuclideanSpace};
+use std::f32;
+
+use cgmath::{Deg, EuclideanSpace, Matrix4, Point3, SquareMatrix, vec3, Vector3};
 use cgmath::{Angle, Rad};
 use cgmath::InnerSpace;
-use std::f32;
 use winit::event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
 
 pub struct Camera {
@@ -58,6 +59,11 @@ impl Camera {
     pub fn position(&self) -> Point3<f32> {
         self.position
     }
+
+    pub fn view_dir(&self) -> Vector3<f32> {
+        self.view_dir
+    }
+
 
     fn handle_keyboard(&mut self, input: KeyboardInput) {
         if input.state == ElementState::Pressed {

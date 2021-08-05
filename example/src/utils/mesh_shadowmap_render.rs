@@ -5,6 +5,7 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use cgmath::{Deg, Matrix4, Point3, Rad, SquareMatrix, Vector3};
 
+use ash_render_env::camera::Camera;
 use ash_render_env::descriptor_set::DescriptorSet;
 use ash_render_env::env::RenderEnv;
 use ash_render_env::pipeline_builder::{Pipeline, PipelineBuilder};
@@ -14,7 +15,6 @@ use crate::shadow_map::uniform_buffer::{ShadowMapData, UniformBuffer};
 use crate::utils::mesh;
 use crate::utils::mesh::Mesh;
 use crate::utils::uniform_buffer::UboBuffers;
-use ash_render_env::camera::Camera;
 
 pub struct MeshShadowMapRenderer {
     render_cmds: Vec<vk::CommandBuffer>,
@@ -22,7 +22,6 @@ pub struct MeshShadowMapRenderer {
     render_pass: vk::RenderPass,
     pipeline: Pipeline,
     descriptor_sets: Vec<DescriptorSet>,
-    descriptor_sets2: Vec<DescriptorSet>,
     uniforms: Vec<UniformBuffer<ShadowMapData>>,
 
     mesh: Arc<Mesh>,
@@ -35,7 +34,7 @@ pub struct MeshShadowMapRenderer {
 }
 
 impl MeshShadowMapRenderer {
-    pub fn new(env: Arc<RenderEnv>, render_pass: vk::RenderPass, mesh: Arc<Mesh>, depth_buffer: vk::ImageView, max_inflight_frames: usize,
+    pub fn new(env: Arc<RenderEnv>, render_pass: vk::RenderPass, mesh: Arc<Mesh>, max_inflight_frames: usize,
                dimensions: [u32; 2]) -> MeshShadowMapRenderer
     {
         let pipeline = {
@@ -54,7 +53,6 @@ impl MeshShadowMapRenderer {
         let sampler = create_texture_sampler(env.device(), 1);
         let mut cmd_bufs = Vec::with_capacity(max_inflight_frames);
         let mut descriptor_sets = Vec::with_capacity(max_inflight_frames);
-        let mut descriptor_sets2 = Vec::with_capacity(max_inflight_frames);
         let mut uniforms = Vec::with_capacity(max_inflight_frames);
         for i in 0..max_inflight_frames {
             let uniform_buffer = UniformBuffer::new(env.clone());
@@ -63,14 +61,8 @@ impl MeshShadowMapRenderer {
                     .add_buffer(uniform_buffer.buffer.clone())
                     .build()
             );
-            descriptor_sets2.push(
-                DescriptorSet::builder(env.device(), pipeline.descriptor_set_layouts.get(1).unwrap())
-                    .add_image_with_layout(depth_buffer, sampler, vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)
-                    .build()
-            );
-
             cmd_bufs.push(
-                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &descriptor_sets2[i], &mesh, dimensions)
+                Self::build_cmd_buf(&env, render_pass, &pipeline, &descriptor_sets[i], &mesh, dimensions)
             );
             uniforms.push(uniform_buffer);
         }
@@ -82,7 +74,6 @@ impl MeshShadowMapRenderer {
             render_pass,
             uniforms,
             descriptor_sets,
-            descriptor_sets2,
             mesh,
             current_frame: 0,
             max_inflight_frames,
@@ -90,7 +81,7 @@ impl MeshShadowMapRenderer {
         }
     }
 
-    fn build_cmd_buf(env: &RenderEnv, render_pass: vk::RenderPass, pipeline: &Pipeline, descriptor_set: &DescriptorSet, descriptor_set2: &DescriptorSet, vertex_buffer: &Mesh, dimensions: [u32; 2]) -> vk::CommandBuffer {
+    fn build_cmd_buf(env: &RenderEnv, render_pass: vk::RenderPass, pipeline: &Pipeline, descriptor_set: &DescriptorSet, vertex_buffer: &Mesh, dimensions: [u32; 2]) -> vk::CommandBuffer {
         let command_buffer = env.create_secondary_command_buffer();
         let device = env.device();
 
@@ -146,7 +137,7 @@ impl MeshShadowMapRenderer {
                 pipeline.graphics_pipeline,
             );
 
-            let descriptor_sets_to_bind = [descriptor_set.set, descriptor_set2.set];
+            let descriptor_sets_to_bind = [descriptor_set.set];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -181,14 +172,14 @@ impl MeshShadowMapRenderer {
         for i in 0..self.max_inflight_frames {
             cmd_bufs.push(
                 Self::build_cmd_buf(&self.env, self.render_pass, &self.pipeline,
-                                    &self.descriptor_sets[i], &self.descriptor_sets2[i], &self.mesh, dimensions)
+                                    &self.descriptor_sets[i], &self.mesh, dimensions)
             );
         }
 
         self.render_cmds = cmd_bufs;
     }
 
-       pub fn draw(&mut self, camera: &Camera) -> vk::CommandBuffer {
+    pub fn draw(&mut self, camera: &Camera) -> vk::CommandBuffer {
         let current_frame = self.current_frame;
         self.current_frame = (self.current_frame + 1) % self.max_inflight_frames;
 
@@ -199,11 +190,21 @@ impl MeshShadowMapRenderer {
             0.01,
             100.0,
         );
+        // let view = Matrix4::<f32>::look_at_rh(
+        //     Point3::new(-0.09,-0.39, -9.5),
+        //     Point3::new(-0.97, 0.17, 0.17),
+        //     Vector3::new(0.0, 1.0, 0.0),
+        // );
+        let proj = cgmath::ortho(
+            -1.0, 1.0,
+            -1.0, 1.0,
+            -5.0, 5.0
+        );
         let w1 = Matrix4::<f32>::from_angle_x(Rad::from(Deg(90.0)));
-        let world = Matrix4::<f32>::from_translation(Vector3::new(0.0, 0.01, -10.0 )) * w1;
+        let world = Matrix4::<f32>::from_translation(Vector3::new(0.0, 0.01, -10.0)) * w1;
 
         self.uniforms[current_frame].write_data(ShadowMapData {
-            light_wp: proj *view * world,
+            light_wp: proj * view * world,
         });
 
         self.render_cmds[current_frame]
@@ -220,7 +221,6 @@ impl Drop for MeshShadowMapRenderer {
         }
     }
 }
-
 
 pub fn create_texture_sampler(device: &ash::Device, mip_levels: u32) -> vk::Sampler {
     let sampler_create_info = vk::SamplerCreateInfo {

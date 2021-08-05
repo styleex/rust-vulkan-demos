@@ -10,7 +10,7 @@ use crate::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
 use crate::egui::cpu_buffer::CpuBuffer;
 use crate::env::RenderEnv;
 use crate::pipeline_builder::{Pipeline, PipelineBuilder};
-use crate::shader::{Shader, ConstantsBuilder};
+use crate::shader::{ConstantsBuilder, Shader};
 use crate::utils::texture::Texture;
 
 struct FontTexture(Texture, u64);
@@ -354,6 +354,20 @@ impl EguiRenderer {
         self.user_textures_descriptors.insert(id, TextureInfo {
             descriptor_set,
             multisampled,
+        });
+    }
+
+    pub fn register_texture_layout(&mut self, id: u64, texture: vk::ImageView, layout: vk::ImageLayout) {
+        let pipeline_layout = &self.pipeline.descriptor_set_layouts[0];
+
+        let descriptor_set = DescriptorSetBuilder::new(
+            self.env.device(), pipeline_layout)
+            .add_image_with_layout(texture, self.sampler, layout)
+            .build();
+
+        self.user_textures_descriptors.insert(id, TextureInfo {
+            descriptor_set,
+            multisampled: false,
         });
     }
 }

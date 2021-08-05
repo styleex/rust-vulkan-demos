@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use ash::vk;
 use egui::math::vec2;
-use winit::event::{WindowEvent};
+use winit::event::WindowEvent;
 
 pub use winit_input::egui_to_winit_cursor_icon;
 
@@ -109,5 +109,9 @@ impl Egui {
 
     pub fn register_texture(&mut self, id: u64, texture: vk::ImageView, multisampled: bool) {
         self.renderer.register_texture(id, texture, multisampled);
+    }
+
+    pub fn register_texture_layout(&mut self, id: u64, texture: vk::ImageView, layout: vk::ImageLayout) {
+        self.renderer.register_texture_layout(id, texture, layout);
     }
 }

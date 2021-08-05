@@ -141,12 +141,17 @@ impl HelloApplication {
 
         let height_map = HeightMap::from_png(Path::new("./assets/terrain/heightmap2.png"));
         let terrain_data = TerrainData::new(env.clone(), height_map);
-        let terrain_renderer = TerrainRenderer::new(env.clone(), offscreen_framebuffer.render_pass(),
-                                                    offscreen_framebuffer.attachments.len() - 1, terrain_data, msaa_samples, MAX_FRAMES_IN_FLIGHT, dimensions);
+        let terrain_renderer = TerrainRenderer::new(
+            env.clone(),
+            offscreen_framebuffer.render_pass(),
+            offscreen_framebuffer.attachments.len() - 1,
+            terrain_data, msaa_samples,
+            MAX_FRAMES_IN_FLIGHT,
+            dimensions);
 
 
         let shadow_map_fb = ShadowMapFramebuffer::new(env.clone());
-        egui.register_texture(1, shadow_map_fb.get_cascade_view(0), false);
+        egui.register_texture_layout(1, shadow_map_fb.get_cascade_view(0), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
         let mut shadowmap_pass_draw_command = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
         shadowmap_pass_draw_command.set_dimensions([4096 as u32, 4096 as u32]);
@@ -155,7 +160,6 @@ impl HelloApplication {
             env.clone(),
             shadow_map_fb.render_pass(),
             mesh.clone(),
-            shadow_map_fb.get_cascade_view(0),
             MAX_FRAMES_IN_FLIGHT,
             [4096, 4096],
         );
@@ -429,7 +433,10 @@ impl HelloApplication {
             ui.separator();
 
             let camera_pos = self.camera.position();
+            let view_dir = self.camera.view_dir();
             ui.label(format!("X: {:.2}, Y: {:.2}, Z: {:.2}", camera_pos.x, camera_pos.y, camera_pos.z));
+
+            ui.label(format!("X: {:.2}, Y: {:.2}, Z: {:.2}", view_dir.x, view_dir.y, view_dir.z));
             ui.label(format!("FPS: {:.2}", self.tick_counter.fps()));
             ui.image(egui::TextureId::User(1), [200.0, 200.0]);
         });

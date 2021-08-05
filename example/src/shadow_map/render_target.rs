@@ -135,7 +135,7 @@ impl ShadowMapFramebuffer {
                 s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::ImageViewCreateFlags::empty(),
-                view_type: vk::ImageViewType::TYPE_2D_ARRAY,
+                view_type: vk::ImageViewType::TYPE_2D,
                 format: depth_format,
                 components: vk::ComponentMapping {
                     r: vk::ComponentSwizzle::IDENTITY,
