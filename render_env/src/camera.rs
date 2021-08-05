@@ -18,6 +18,9 @@ pub struct Camera {
     up_dir: Vector3<f32>,
 
     viewport: [u32; 2],
+
+    pub near_clip: f32,
+    pub far_clip: f32,
 }
 
 impl Camera {
@@ -32,6 +35,8 @@ impl Camera {
             up_dir: vec3(0.0, 1.0, 0.0),
             yaw: -90.0,
             pitch: 0.0,
+            near_clip: 0.01,
+            far_clip: 20.0,
         }
     }
 
@@ -40,8 +45,9 @@ impl Camera {
         self.proj = cgmath::perspective(
             Rad::from(Deg(45.0)),
             w as f32 / h as f32,
-            0.01,
-            100.0);
+            self.near_clip,
+            self.far_clip,
+        );
     }
 
     pub fn view_matrix(&self) -> Matrix4<f32> {
@@ -63,7 +69,6 @@ impl Camera {
     pub fn view_dir(&self) -> Vector3<f32> {
         self.view_dir
     }
-
 
     fn handle_keyboard(&mut self, input: KeyboardInput) {
         if input.state == ElementState::Pressed {

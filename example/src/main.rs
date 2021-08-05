@@ -310,7 +310,9 @@ impl HelloApplication {
                 stencil: 0,
             }
         }];
-        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw(&self.camera);
+        let vp = self.shadow_map_fb.update_cascades(&self.camera);
+
+        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw(&self.camera, vp);
         let shadowmap_pass_cmd = self.shadowmap_pass_draw_command.execute_secondary(
             shadow_map_clear,
             self.shadow_map_fb.frambuffer(0),

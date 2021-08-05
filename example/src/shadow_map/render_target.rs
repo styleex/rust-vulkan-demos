@@ -5,6 +5,8 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 
 use ash_render_env::env::RenderEnv;
+use ash_render_env::camera::Camera;
+use cgmath::{SquareMatrix, Vector4, Vector3, InnerSpace, Point3, Matrix4, Transform, MetricSpace};
 
 const CASCADE_COUNT: usize = 4;
 
@@ -206,6 +208,57 @@ impl ShadowMapFramebuffer {
 
     pub fn render_pass(&self) -> vk::RenderPass {
         self.render_pass.clone()
+    }
+
+    pub fn update_cascades(&mut self, camera: &Camera) -> Matrix4<f32>{
+        let frustum_corners = [
+            cgmath::Vector3::new(-1.0, 1.0, -1.0),
+            cgmath::Vector3::new(1.0, 1.0, -1.0),
+            cgmath::Vector3::new(1.0, -1.0, -1.0),
+            cgmath::Vector3::new(-1.0, -1.0, -1.0),
+            cgmath::Vector3::new(-1.0, 1.0, 1.0),
+            cgmath::Vector3::new(1.0, 1.0, 1.0),
+            cgmath::Vector3::new(1.0, -1.0, 1.0),
+            cgmath::Vector3::new(-1.0, -1.0, 1.0),
+        ];
+
+        let inv_cam = (camera.proj_matrix() * camera.view_matrix()).invert().unwrap();
+
+        let mut camera_corners = vec![];
+        for corner in frustum_corners {
+            let inv_corner: Vector4<f32> = inv_cam * Vector4::new(corner.x, corner.y, corner.z, 1.0);
+            camera_corners.push(Vector3::new(inv_corner.x / inv_corner.w, inv_corner.y / inv_corner.w, inv_corner.z / inv_corner.w))
+        }
+
+
+        let mut furstum_center = Vector3::new(0.0, 0.0, 0.0);
+        for v in camera_corners.iter() {
+            furstum_center = furstum_center + v;
+        }
+        furstum_center /= (frustum_corners.len() as f32);
+
+        let mut radius = 0.0 as f32;
+        for v in camera_corners.iter() {
+            let dist = v.distance(furstum_center);
+            radius = radius.max(dist);
+        }
+        radius = (radius * 16.0).ceil() / 16.0;
+
+        let max_extents = cgmath::Vector3::new(radius, radius, radius);
+        let min_extents = -max_extents;
+
+        let light_dir = Vector3::new(0.1, -0.1, 0.1).normalize();
+        let light_pos = furstum_center - light_dir * (-min_extents.z);
+        let view: Matrix4<f32> = cgmath::Matrix4::look_at_rh(
+            Point3::new(light_pos.x, light_pos.y, light_pos.z),
+            Point3::new(furstum_center.x, furstum_center.y, furstum_center.z),
+            Vector3::new(0.0, 1.0, 0.0),
+        );
+
+        // println!("{:?} {:?}", Point3::new(light_pos.x, light_pos.y, light_pos.z), Point3::new(furstum_center.x, furstum_center.y, furstum_center.z));
+        let proj = cgmath::ortho(min_extents.x, max_extents.x, min_extents.y, max_extents.y, 0.0, max_extents.z - min_extents.z);
+
+        proj * view
     }
 }
 

@@ -179,7 +179,7 @@ impl MeshShadowMapRenderer {
         self.render_cmds = cmd_bufs;
     }
 
-    pub fn draw(&mut self, camera: &Camera) -> vk::CommandBuffer {
+    pub fn draw(&mut self, camera: &Camera, light_vp: Matrix4<f32>) -> vk::CommandBuffer {
         let current_frame = self.current_frame;
         self.current_frame = (self.current_frame + 1) % self.max_inflight_frames;
 
@@ -204,7 +204,7 @@ impl MeshShadowMapRenderer {
         let world = Matrix4::<f32>::from_translation(Vector3::new(0.0, 0.01, -10.0)) * w1;
 
         self.uniforms[current_frame].write_data(ShadowMapData {
-            light_wp: proj * view * world,
+            light_wp: light_vp * world, //proj * view * world,
         });
 
         self.render_cmds[current_frame]
