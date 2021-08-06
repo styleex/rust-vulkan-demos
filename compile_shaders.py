@@ -15,8 +15,8 @@ def get_mtime(fpath) -> float:
 
 
 def main():
-    base_src_path = 'shaders/src/'
-    base_dst_path = 'shaders/spv/'
+    base_src_path = 'assets/shaders/src/'
+    base_dst_path = 'assets/shaders/spv/'
     for file in glob.glob('{}/**'.format(base_src_path), recursive=True):
         if not (file.endswith('.vert') or file.endswith('.frag')):
             continue

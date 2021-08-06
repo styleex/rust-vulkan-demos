@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
+use cgmath::Matrix4;
 
 use ash_render_env::{descriptor_set, pipeline_builder, shader};
 use ash_render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
@@ -10,20 +11,30 @@ use ash_render_env::env::RenderEnv;
 use ash_render_env::frame_buffer::Framebuffer;
 use ash_render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 
+use crate::shadow_map::uniform_buffer::UniformBuffer;
+
+#[repr(C)]
+struct Uniforms {
+    light_vp: Matrix4<f32>,
+}
+
+
 pub struct QuadRenderer {
     sampler: vk::Sampler,
+    shadow_sampler: vk::Sampler,
     descriptor_set: descriptor_set::DescriptorSet,
     pipeline: pipeline_builder::Pipeline,
     pub render_pass: vk::RenderPass,
     pub second_buffer: vk::CommandBuffer,
+    uniform_buffer: UniformBuffer<Uniforms>,
     env: Arc<RenderEnv>,
 }
 
 impl QuadRenderer {
-    pub fn new(env: Arc<RenderEnv>, framebuffer: &Framebuffer, render_pass: vk::RenderPass, input_samples: vk::SampleCountFlags, dimensions: [u32; 2]) -> QuadRenderer {
+    pub fn new(env: Arc<RenderEnv>, framebuffer: &Framebuffer, shadow_map_view: vk::ImageView, render_pass: vk::RenderPass, input_samples: vk::SampleCountFlags, dimensions: [u32; 2]) -> QuadRenderer {
         let pipeline = {
-            let vert_shader_module = shader::Shader::load(env.device(), "shaders/spv/compose.vert.spv");
-            let frag_shader_module = shader::Shader::load(env.device(), "shaders/spv/compose.frag.spv")
+            let vert_shader_module = shader::Shader::load(env.device(), "assets/shaders/spv/compose.vert.spv");
+            let frag_shader_module = shader::Shader::load(env.device(), "assets/shaders/spv/compose.frag.spv")
                 .specialize(shader::ConstantsBuilder::new().add_u32(input_samples.as_raw()));
 
 
@@ -45,26 +56,53 @@ impl QuadRenderer {
             env.device().create_sampler(&sampler_create_info, None).unwrap()
         };
 
+        let sampler_create_info = vk::SamplerCreateInfo::builder()
+            .min_filter(vk::Filter::LINEAR)
+            .mag_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE)
+            .anisotropy_enable(false);
+
+        let shadow_sampler = unsafe {
+            env.device().create_sampler(&sampler_create_info, None).unwrap()
+        };
+
+
+        let uniform_buffer = UniformBuffer::new(env.clone());
+
         let descriptor_set = DescriptorSetBuilder::new(
             env.device(), pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_image(framebuffer.attachments.get(0).unwrap().view, sampler)
             .add_image(framebuffer.attachments.get(1).unwrap().view, sampler)
             .add_image(framebuffer.attachments.get(2).unwrap().view, sampler)
+            .add_image_with_layout(shadow_map_view, shadow_sampler.clone(), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)
+            .add_buffer(uniform_buffer.buffer)
             .build();
+
 
         let second_buffer = Self::render_quad(&env, dimensions, &pipeline, &descriptor_set, render_pass);
 
         QuadRenderer {
             pipeline,
             render_pass,
+            shadow_sampler,
 
             sampler,
             descriptor_set,
             second_buffer,
+
+            uniform_buffer,
             env: env.clone(),
         }
     }
 
+    pub fn update_shadows(&mut self, light_vp: Matrix4<f32>) {
+        self.uniform_buffer.write_data(Uniforms {
+            light_vp,
+        })
+    }
     fn render_quad(env: &RenderEnv, dimensions: [u32; 2], pipeline: &Pipeline, descriptor_set: &DescriptorSet, render_pass: vk::RenderPass) -> vk::CommandBuffer {
         let device = env.device();
         let create_info = vk::CommandBufferAllocateInfo {
@@ -146,12 +184,14 @@ impl QuadRenderer {
         cmd_buf
     }
 
-    pub fn update_framebuffer(&mut self, framebuffer: &Framebuffer, dimensions: [u32; 2]) {
+    pub fn update_framebuffer(&mut self, framebuffer: &Framebuffer, shadow_map_view: vk::ImageView, dimensions: [u32; 2]) {
         self.descriptor_set = DescriptorSetBuilder::new(
             self.env.device(), self.pipeline.descriptor_set_layouts.get(0).unwrap())
             .add_image(framebuffer.attachments.get(0).unwrap().view, self.sampler)
             .add_image(framebuffer.attachments.get(1).unwrap().view, self.sampler)
             .add_image(framebuffer.attachments.get(2).unwrap().view, self.sampler)
+            .add_image_with_layout(shadow_map_view, self.shadow_sampler, vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)
+            .add_buffer(self.uniform_buffer.buffer)
             .build();
 
         self.second_buffer = Self::render_quad(&self.env, dimensions, &self.pipeline, &self.descriptor_set, self.render_pass);

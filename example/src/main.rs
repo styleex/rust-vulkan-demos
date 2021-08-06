@@ -1,9 +1,11 @@
+use std::ops::RangeInclusive;
 use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
+use cgmath::{Matrix4, SquareMatrix};
 use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::run_return::EventLoopExtRunReturn;
@@ -64,6 +66,8 @@ struct HelloApplication {
     shadow_map_fb: ShadowMapFramebuffer,
 
     env: Arc<env::RenderEnv>,
+    light_vp: Matrix4<f32>,
+    cascade_split_lambda: f32,
 }
 
 impl HelloApplication {
@@ -104,7 +108,6 @@ impl HelloApplication {
         ));
         offscreen_framebuffer.resize_swapchain(dimensions);
 
-        let quad_renderer = QuadRenderer::new(env.clone(), &offscreen_framebuffer, quad_render_pass, msaa_samples, dimensions);
         let sync = sync::create_sync_objects(env.device());
 
         let mut egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions, MAX_FRAMES_IN_FLIGHT, msaa_samples);
@@ -164,6 +167,14 @@ impl HelloApplication {
             [4096, 4096],
         );
 
+        let quad_renderer = QuadRenderer::new(
+            env.clone(),
+            &offscreen_framebuffer,
+            shadow_map_fb.get_cascade_view(0),
+            quad_render_pass,
+            msaa_samples,
+            dimensions);
+
         println!("created");
 
         let tick_counter = FPSLimiter::new();
@@ -197,6 +208,8 @@ impl HelloApplication {
             terrain_renderer,
 
             tick_counter,
+            light_vp: Matrix4::identity(),
+            cascade_split_lambda: 0.9,
         }
     }
 
@@ -227,7 +240,10 @@ impl HelloApplication {
                     }
 
                     if !self.egui.context().is_pointer_over_area() {
-                        self.camera.handle_event(&event);
+                        let changed = self.camera.handle_event(&event);
+                        if changed {
+                            self.light_vp = self.shadow_map_fb.update_cascades(&self.camera, self.cascade_split_lambda);
+                        }
                     }
 
                     if !self.camera.mouse_acquired() {
@@ -310,16 +326,15 @@ impl HelloApplication {
                 stencil: 0,
             }
         }];
-        let vp = self.shadow_map_fb.update_cascades(&self.camera);
-
-        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw(&self.camera, vp);
+        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw(&self.camera, self.light_vp);
         let shadowmap_pass_cmd = self.shadowmap_pass_draw_command.execute_secondary(
             shadow_map_clear,
             self.shadow_map_fb.frambuffer(0),
             self.shadow_map_fb.render_pass(),
-            &[mesh_shadowmap_draw]
+            &[mesh_shadowmap_draw],
         );
 
+        self.quad_renderer.update_shadows(self.light_vp);
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let terrain_draw = self.terrain_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let skybox_draw = self.skybox_renderer.draw(self.camera.skybox_view_matrix(), self.camera.proj_matrix());
@@ -441,6 +456,11 @@ impl HelloApplication {
             ui.label(format!("X: {:.2}, Y: {:.2}, Z: {:.2}", view_dir.x, view_dir.y, view_dir.z));
             ui.label(format!("FPS: {:.2}", self.tick_counter.fps()));
             ui.image(egui::TextureId::User(1), [200.0, 200.0]);
+
+            let resp = ui.add(egui::DragValue::new(&mut self.cascade_split_lambda).speed(0.01).clamp_range(RangeInclusive::new(0.1, 1.0)));
+            if resp.changed() {
+                self.light_vp = self.shadow_map_fb.update_cascades(&self.camera, self.cascade_split_lambda);
+            }
         });
     }
 
@@ -463,7 +483,7 @@ impl HelloApplication {
         self.egui.set_dimensions(dimensions);
         self.egui.register_texture(0, self.offscreen_buffer.attachments[2].view, true);
 
-        self.quad_renderer.update_framebuffer(&self.offscreen_buffer, dimensions);
+        self.quad_renderer.update_framebuffer(&self.offscreen_buffer, self.shadow_map_fb.get_cascade_view(0), dimensions);
         self.mesh_renderer.resize_framebuffer(dimensions);
         self.skybox_renderer.resize_framebuffer(dimensions);
         self.terrain_renderer.resize_framebuffer(dimensions);

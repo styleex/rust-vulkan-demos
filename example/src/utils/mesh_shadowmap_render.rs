@@ -38,8 +38,8 @@ impl MeshShadowMapRenderer {
                dimensions: [u32; 2]) -> MeshShadowMapRenderer
     {
         let pipeline = {
-            let vert_shader_module = shader::Shader::load(env.device(), "shaders/spv/mesh/shadow_map.vert.spv");
-            let frag_shader_module = shader::Shader::load(env.device(), "shaders/spv/mesh/shadow_map.frag.spv");
+            let vert_shader_module = shader::Shader::load(env.device(), "assets/shaders/spv/mesh/shadow_map.vert.spv");
+            let frag_shader_module = shader::Shader::load(env.device(), "assets/shaders/spv/mesh/shadow_map.frag.spv");
 
             PipelineBuilder::new(env.device().clone(), render_pass, 0)
                 .vertex_shader(vert_shader_module)

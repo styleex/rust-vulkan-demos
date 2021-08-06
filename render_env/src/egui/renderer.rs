@@ -118,8 +118,8 @@ impl EguiRenderer {
         let render_pass = create_render_pass(env.device(), output_format);
 
         let pipeline = {
-            let vs = Shader::load(env.device(), "shaders/spv/egui/egui.vert.spv");
-            let ps = Shader::load(env.device(), "shaders/spv/egui/egui.frag.spv");
+            let vs = Shader::load(env.device(), "assets/shaders/spv/egui/egui.vert.spv");
+            let ps = Shader::load(env.device(), "assets/shaders/spv/egui/egui.frag.spv");
 
             PipelineBuilder::new(env.device().clone(), render_pass, 0)
                 .vertex_input(vertex_bindings.clone(), vert_attrs.clone())
@@ -131,8 +131,8 @@ impl EguiRenderer {
         };
 
         let pipeline_msaa = {
-            let vs = Shader::load(env.device(), "shaders/spv/egui/egui_msaa.vert.spv");
-            let ps = Shader::load(env.device(), "shaders/spv/egui/egui_msaa.frag.spv")
+            let vs = Shader::load(env.device(), "assets/shaders/spv/egui/egui_msaa.vert.spv");
+            let ps = Shader::load(env.device(), "assets/shaders/spv/egui/egui_msaa.frag.spv")
                 .specialize(ConstantsBuilder::new().add_u32(msaa_samples.as_raw() as u32));
 
             PipelineBuilder::new(env.device().clone(), render_pass, 0)

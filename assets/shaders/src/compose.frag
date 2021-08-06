@@ -5,12 +5,26 @@ layout(set = 0, binding = 0) uniform sampler2DMS samplerAlbedo;
 layout(set = 0, binding = 1) uniform sampler2DMS samplerPosition;
 layout(set = 0, binding = 2) uniform sampler2DMS samplerNormal;
 
+layout(set = 0, binding = 3) uniform sampler2D shadowMap;
+
+layout(binding = 4) uniform UniformBufferObject {
+    mat4 light_vp;
+} ubo;
+
+
 
 layout(location = 0) out vec4 outFragcolor;
 layout(constant_id = 0) const int NUM_SAMPLES = 8;
 
 layout (location = 0) in vec2 inUV;
 
+
+const mat4 biasMat = mat4(
+	0.5, 0.0, 0.0, 0.0,
+	0.0, 0.5, 0.0, 0.0,
+	0.0, 0.0, 1.0, 0.0,
+	0.5, 0.5, 0.0, 1.0
+);
 
 vec4 resolve(sampler2DMS tex, ivec2 uv)
 {
@@ -23,6 +37,23 @@ vec4 resolve(sampler2DMS tex, ivec2 uv)
 
     return result / float(NUM_SAMPLES);
 }
+
+
+float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex) {
+	float shadow = 1.0;
+	float bias = 0.005;
+	float ambient = 0.3;
+
+	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
+		float dist = texture(shadowMap, shadowCoord.st + offset).r;
+		if (shadowCoord.w > 0 && dist < shadowCoord.z - bias) {
+			shadow = ambient;
+		}
+	}
+	return shadow;
+
+}
+
 
 vec3 calculateLighting(vec3 pos, vec3 normal, vec4 albedo)
 {
@@ -39,6 +70,11 @@ vec3 calculateLighting(vec3 pos, vec3 normal, vec4 albedo)
 void main() {
     ivec2 attDim = textureSize(samplerAlbedo);
     ivec2 UV = ivec2(inUV * attDim);
+
+	vec3 pos = resolve(samplerPosition, UV).xyz;
+	vec4 shadowCoord = (biasMat * ubo.light_vp) * vec4(pos, 1.0);
+	float shadow = textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
+
 
 	// Ambient part
 	vec4 alb = resolve(samplerAlbedo, UV);
@@ -57,5 +93,5 @@ void main() {
 
 	fragColor = (alb.rgb * vec3(0.4)) + fragColor / float(NUM_SAMPLES);
 
-	outFragcolor = vec4(fragColor, 1.0);
+	outFragcolor = vec4(fragColor, 1.0) * shadow;
 }

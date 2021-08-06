@@ -35,8 +35,8 @@ impl Camera {
             up_dir: vec3(0.0, 1.0, 0.0),
             yaw: -90.0,
             pitch: 0.0,
-            near_clip: 0.01,
-            far_clip: 20.0,
+            near_clip: 0.001,
+            far_clip: 100.0,
         }
     }
 
@@ -89,10 +89,12 @@ impl Camera {
         self.mouse_pressed
     }
 
-    pub fn handle_event(&mut self, event: &WindowEvent) {
+    pub fn handle_event(&mut self, event: &WindowEvent) -> bool {
+        let mut changed = false;
         match event {
             &WindowEvent::KeyboardInput { input, .. } => {
                 self.handle_keyboard(input);
+                changed = true;
             }
 
             &WindowEvent::MouseInput { state, button, .. } => {
@@ -101,7 +103,7 @@ impl Camera {
             &WindowEvent::CursorMoved { position, .. } => {
                 if !self.mouse_pressed {
                     self.last_mouse_position = position.into();
-                    return;
+                    return changed;
                 }
 
                 let pos: [i32; 2] = position.into();
@@ -126,8 +128,12 @@ impl Camera {
                     Rad::from(Deg(self.pitch)).sin(),
                     Rad::from(Deg(self.yaw)).sin() * Rad::from(Deg(self.pitch)).cos(),
                 ).normalize();
+
+                changed = true
             }
             _ => (),
         }
+
+        changed
     }
 }

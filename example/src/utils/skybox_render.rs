@@ -36,8 +36,8 @@ impl SkyboxRenderer {
                dimensions: [u32; 2]) -> SkyboxRenderer
     {
         let pipeline = {
-            let vert_shader_module = shader::Shader::load(env.device(), "shaders/spv/skybox.vert.spv");
-            let frag_shader_module = shader::Shader::load(env.device(), "shaders/spv/skybox.frag.spv");
+            let vert_shader_module = shader::Shader::load(env.device(), "assets/shaders/spv/skybox.vert.spv");
+            let frag_shader_module = shader::Shader::load(env.device(), "assets/shaders/spv/skybox.frag.spv");
 
             PipelineBuilder::new(env.device().clone(), render_pass, 0)
                 .vertex_shader(vert_shader_module)
