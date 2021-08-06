@@ -264,7 +264,6 @@ impl ShadowMapFramebuffer {
             camera_corners[i] = camera_corners[i] + dist * last_split_dist;
         }
 
-
         let mut frustum_center = Vector3::new(0.0, 0.0, 0.0);
         for v in camera_corners.iter().cloned() {
             frustum_center += v;

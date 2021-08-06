@@ -41,7 +41,7 @@ vec4 resolve(sampler2DMS tex, ivec2 uv)
 
 float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex) {
 	float shadow = 1.0;
-	float bias = 0.005;
+	float bias = 0.05;
 	float ambient = 0.3;
 
 	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
@@ -71,14 +71,10 @@ void main() {
     ivec2 attDim = textureSize(samplerAlbedo);
     ivec2 UV = ivec2(inUV * attDim);
 
-	vec3 pos = resolve(samplerPosition, UV).xyz;
-	vec4 shadowCoord = (biasMat * ubo.light_vp) * vec4(pos, 1.0);
-	float shadow = textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
-
-
 	// Ambient part
 	vec4 alb = resolve(samplerAlbedo, UV);
 	vec3 fragColor = vec3(0.0);
+	float shadow = 0.0;
 
 	// Calualte lighting for every MSAA sample
 	for (int i = 0; i < NUM_SAMPLES; i++)
@@ -87,8 +83,12 @@ void main() {
 		vec3 normal = texelFetch(samplerNormal, UV, i).rgb;
 		vec4 albedo = texelFetch(samplerAlbedo, UV, i);
 		fragColor += calculateLighting(pos, normal, albedo);
+
+		vec4 shadowCoord = (biasMat * ubo.light_vp) * vec4(pos, 1.0);
+		shadow += textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
 	}
 
+	shadow /= NUM_SAMPLES;
 //	fragColor = resolve(samplerNormal, UV).rgb;
 
 	fragColor = (alb.rgb * vec3(0.4)) + fragColor / float(NUM_SAMPLES);

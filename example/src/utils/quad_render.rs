@@ -62,7 +62,7 @@ impl QuadRenderer {
             .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
             .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
             .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE)
+            .border_color(vk::BorderColor::FLOAT_OPAQUE_BLACK)
             .anisotropy_enable(false);
 
         let shadow_sampler = unsafe {
