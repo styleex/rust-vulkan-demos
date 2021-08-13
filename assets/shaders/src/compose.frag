@@ -61,7 +61,7 @@ vec3 calculateLighting(vec3 pos, vec3 normal, vec4 albedo)
 	if (normal == vec3(0.0)) {
 		return albedo.rgb;
 	}
-    float light_percent = -dot(vec3(0.1, -0.1, 0.1), normal);
+    float light_percent = dot(vec3(0.7, 0.25, -0.67), normal);
     light_percent = max(light_percent, 0.0);
 
 	return albedo.rgb * 1.5 * light_percent;
@@ -76,7 +76,7 @@ float filterPCF(vec4 sc, uint cascadeIndex)
 
 	float shadowFactor = 0.0;
 	int count = 0;
-	int range = 3;
+	int range = 4;
 
 	for (int x = -range; x <= range; x++) {
 		for (int y = -range; y <= range; y++) {
