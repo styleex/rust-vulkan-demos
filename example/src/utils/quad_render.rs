@@ -57,14 +57,26 @@ impl QuadRenderer {
             env.device().create_sampler(&sampler_create_info, None).unwrap()
         };
 
-        let sampler_create_info = vk::SamplerCreateInfo::builder()
-            .min_filter(vk::Filter::NEAREST)
-            .mag_filter(vk::Filter::NEAREST)
-            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE)
-            .anisotropy_enable(false);
+        let sampler_create_info = vk::SamplerCreateInfo {
+            s_type: vk::StructureType::SAMPLER_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::SamplerCreateFlags::empty(),
+            mag_filter: vk::Filter::LINEAR,
+            min_filter: vk::Filter::LINEAR,
+            mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+            address_mode_u: vk::SamplerAddressMode::CLAMP_TO_BORDER,
+            address_mode_v: vk::SamplerAddressMode::CLAMP_TO_BORDER,
+            address_mode_w: vk::SamplerAddressMode::CLAMP_TO_BORDER,
+            mip_lod_bias: 0.0,
+            anisotropy_enable: 0,
+            max_anisotropy: 1.0,
+            compare_enable: 0,
+            compare_op: Default::default(),
+            min_lod: 0.0,
+            max_lod: 1.0,
+            border_color: vk::BorderColor::FLOAT_OPAQUE_WHITE,
+            unnormalized_coordinates: 0
+        };
 
         let shadow_sampler = unsafe {
             env.device().create_sampler(&sampler_create_info, None).unwrap()

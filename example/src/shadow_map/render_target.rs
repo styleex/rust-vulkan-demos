@@ -288,17 +288,17 @@ impl ShadowMapFramebuffer {
             Vector3::new(0.0, 1.0, 0.0),
         );
 
-        println!("pos={:?} dir={:?} radius={:?}", light_pos, light_dir, radius);
+        // println!("pos={:?} dir={:?} radius={:?}", light_pos, light_dir, radius);
 
         // println!("{:?} {:?}", Point3::new(light_pos.x, light_pos.y, light_pos.z), Point3::new(furstum_center.x, furstum_center.y, furstum_center.z));
         let proj = cgmath::ortho(
-            min_extents.x, max_extents.x,
-            min_extents.y, max_extents.y,
+            2.0 * min_extents.x, 2.0 * max_extents.x,
+            2.0 * min_extents.y, 2.0 * max_extents.y,
             -10.0, 100.0 * (max_extents.z - min_extents.z),
         );
 
         let split_depth = (camera.near_clip + split_dist * clip_range) * -1.0;
-        println!("{}", split_depth);
+        // println!("{}", split_depth);
         proj * view
     }
 }

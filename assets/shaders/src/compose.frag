@@ -42,7 +42,7 @@ vec4 resolve(sampler2DMS tex, ivec2 uv)
 
 float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex) {
 	float shadow = 1.0;
-	float bias = 0.005;
+	float bias = 0.0005;
 	float ambient = 0.3;
 
 	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
@@ -76,7 +76,7 @@ float filterPCF(vec4 sc, uint cascadeIndex)
 
 	float shadowFactor = 0.0;
 	int count = 0;
-	int range = 1;
+	int range = 3;
 
 	for (int x = -range; x <= range; x++) {
 		for (int y = -range; y <= range; y++) {
@@ -109,10 +109,10 @@ void main() {
 
 		vec4 view_pos = ubo.view * vec4(pos, 1.0);
 		view_pos /= view_pos.w;
-		if(view_pos.z < -4.516079) {
-			shadow += 1.0;
-			continue;
-		}
+//		if(view_pos.z < -4.516079) {
+//			shadow += 1.0;
+//			continue;
+//		}
 
 		cascadeColor = vec3(1.0f, 0.25f, 0.25f);
 
@@ -127,5 +127,5 @@ void main() {
 	fragColor = (alb.rgb * vec3(0.4)) + fragColor / float(NUM_SAMPLES);
 
 	outFragcolor = vec4(fragColor, 1.0) * shadow;
-	outFragcolor.rgb *= cascadeColor;
+//	outFragcolor.rgb *= cascadeColor;
 }

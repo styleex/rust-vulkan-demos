@@ -436,7 +436,8 @@ impl HelloApplication {
             self.is_window_resized = false;
         }
 
-        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        // FIXME: если раскомментировать - то теневые карты начнут дрожжать при передвижении
+        // self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     fn render_gui(&mut self) {
