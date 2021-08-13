@@ -15,6 +15,7 @@ use crate::shadow_map::uniform_buffer::UniformBuffer;
 
 #[repr(C)]
 struct Uniforms {
+    view: Matrix4<f32>,
     light_vp: Matrix4<f32>,
 }
 
@@ -57,12 +58,12 @@ impl QuadRenderer {
         };
 
         let sampler_create_info = vk::SamplerCreateInfo::builder()
-            .min_filter(vk::Filter::LINEAR)
-            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::NEAREST)
+            .mag_filter(vk::Filter::NEAREST)
             .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
             .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
             .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .border_color(vk::BorderColor::FLOAT_OPAQUE_BLACK)
+            .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE)
             .anisotropy_enable(false);
 
         let shadow_sampler = unsafe {
@@ -81,7 +82,6 @@ impl QuadRenderer {
             .add_buffer(uniform_buffer.buffer)
             .build();
 
-
         let second_buffer = Self::render_quad(&env, dimensions, &pipeline, &descriptor_set, render_pass);
 
         QuadRenderer {
@@ -98,8 +98,9 @@ impl QuadRenderer {
         }
     }
 
-    pub fn update_shadows(&mut self, light_vp: Matrix4<f32>) {
+    pub fn update_shadows(&mut self, view: Matrix4<f32>, light_vp: Matrix4<f32>) {
         self.uniform_buffer.write_data(Uniforms {
+            view,
             light_vp,
         })
     }
@@ -202,6 +203,7 @@ impl Drop for QuadRenderer {
     fn drop(&mut self) {
         unsafe {
             self.env.device().destroy_sampler(self.sampler, None);
+            self.env.device().destroy_sampler(self.shadow_sampler, None);
         }
     }
 }

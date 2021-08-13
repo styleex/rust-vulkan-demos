@@ -8,6 +8,7 @@ layout(set = 0, binding = 2) uniform sampler2DMS samplerNormal;
 layout(set = 0, binding = 3) uniform sampler2D shadowMap;
 
 layout(binding = 4) uniform UniformBufferObject {
+	mat4 view;
     mat4 light_vp;
 } ubo;
 
@@ -41,12 +42,12 @@ vec4 resolve(sampler2DMS tex, ivec2 uv)
 
 float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex) {
 	float shadow = 1.0;
-	float bias = 0.05;
+	float bias = 0.005;
 	float ambient = 0.3;
 
 	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
 		float dist = texture(shadowMap, shadowCoord.st + offset).r;
-		if (shadowCoord.w > 0 && dist < shadowCoord.z - bias) {
+		if (shadowCoord.w > 0 && (shadowCoord.z - bias) > dist) {
 			shadow = ambient;
 		}
 	}
@@ -66,6 +67,26 @@ vec3 calculateLighting(vec3 pos, vec3 normal, vec4 albedo)
 	return albedo.rgb * 1.5 * light_percent;
 }
 
+float filterPCF(vec4 sc, uint cascadeIndex)
+{
+	ivec2 texDim = textureSize(shadowMap, 0).xy;
+	float scale = 0.75;
+	float dx = scale * 1.0 / float(texDim.x);
+	float dy = scale * 1.0 / float(texDim.y);
+
+	float shadowFactor = 0.0;
+	int count = 0;
+	int range = 1;
+
+	for (int x = -range; x <= range; x++) {
+		for (int y = -range; y <= range; y++) {
+			shadowFactor += textureProj(sc, vec2(dx*x, dy*y), cascadeIndex);
+			count++;
+		}
+	}
+	return shadowFactor / count;
+}
+
 
 void main() {
     ivec2 attDim = textureSize(samplerAlbedo);
@@ -77,15 +98,27 @@ void main() {
 	float shadow = 0.0;
 
 	// Calualte lighting for every MSAA sample
+	vec3 cascadeColor = vec3(1.0);
 	for (int i = 0; i < NUM_SAMPLES; i++)
 	{
 		vec3 pos = texelFetch(samplerPosition, UV, i).rgb;
+
 		vec3 normal = texelFetch(samplerNormal, UV, i).rgb;
 		vec4 albedo = texelFetch(samplerAlbedo, UV, i);
 		fragColor += calculateLighting(pos, normal, albedo);
 
+		vec4 view_pos = ubo.view * vec4(pos, 1.0);
+		view_pos /= view_pos.w;
+		if(view_pos.z < -4.516079) {
+			shadow += 1.0;
+			continue;
+		}
+
+		cascadeColor = vec3(1.0f, 0.25f, 0.25f);
+
 		vec4 shadowCoord = (biasMat * ubo.light_vp) * vec4(pos, 1.0);
-		shadow += textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
+		//shadow += textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
+		shadow += filterPCF(shadowCoord / shadowCoord.w, 0);
 	}
 
 	shadow /= NUM_SAMPLES;
@@ -94,4 +127,5 @@ void main() {
 	fragColor = (alb.rgb * vec3(0.4)) + fragColor / float(NUM_SAMPLES);
 
 	outFragcolor = vec4(fragColor, 1.0) * shadow;
+	outFragcolor.rgb *= cascadeColor;
 }

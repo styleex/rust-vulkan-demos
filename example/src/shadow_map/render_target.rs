@@ -43,7 +43,7 @@ pub struct ShadowMapFramebuffer {
 impl ShadowMapFramebuffer {
     pub fn new(env: Arc<RenderEnv>) -> ShadowMapFramebuffer {
         let (cascade_width, cascade_height) = (4096 as u32, 4096 as u32);
-        let depth_format = vk::Format::D16_UNORM;
+        let depth_format = vk::Format::D32_SFLOAT;
         let render_pass = create_render_pass(env.device(), depth_format);
 
 
@@ -281,22 +281,24 @@ impl ShadowMapFramebuffer {
         let min_extents = -max_extents;
 
         let light_dir = Vector3::new(0.70, 0.25, -0.67).normalize();
-        let light_pos = frustum_center - light_dir * (-min_extents.z);
+        let light_pos = frustum_center - light_dir * (-min_extents.z) * 100.0;
         let view: Matrix4<f32> = cgmath::Matrix4::look_at_rh(
             Point3::new(light_pos.x, light_pos.y, light_pos.z),
             Point3::new(frustum_center.x, frustum_center.y, frustum_center.z),
             Vector3::new(0.0, 1.0, 0.0),
         );
 
-                println!("pos={:?} dir={:?} radius={:?}", light_pos, light_dir, radius);
+        println!("pos={:?} dir={:?} radius={:?}", light_pos, light_dir, radius);
 
         // println!("{:?} {:?}", Point3::new(light_pos.x, light_pos.y, light_pos.z), Point3::new(furstum_center.x, furstum_center.y, furstum_center.z));
         let proj = cgmath::ortho(
             min_extents.x, max_extents.x,
             min_extents.y, max_extents.y,
-            0.0, max_extents.z - min_extents.z
+            -10.0, 100.0 * (max_extents.z - min_extents.z),
         );
 
+        let split_depth = (camera.near_clip + split_dist * clip_range) * -1.0;
+        println!("{}", split_depth);
         proj * view
     }
 }

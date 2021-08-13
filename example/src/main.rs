@@ -334,7 +334,7 @@ impl HelloApplication {
             &[mesh_shadowmap_draw],
         );
 
-        self.quad_renderer.update_shadows(self.light_vp);
+        self.quad_renderer.update_shadows(self.camera.view_matrix(), self.light_vp);
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let terrain_draw = self.terrain_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let skybox_draw = self.skybox_renderer.draw(self.camera.skybox_view_matrix(), self.camera.proj_matrix());
