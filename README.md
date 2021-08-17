@@ -21,7 +21,7 @@ Plan:
 
 * HDRR pipeline
 
-* Shadow mapping pipeline
+* (partial) Shadow mapping pipeline
 
 
 
