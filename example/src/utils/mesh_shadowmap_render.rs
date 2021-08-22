@@ -183,23 +183,6 @@ impl MeshShadowMapRenderer {
         let current_frame = self.current_frame;
         self.current_frame = (self.current_frame + 1) % self.max_inflight_frames;
 
-        let view = camera.view_matrix();
-        let proj = cgmath::perspective(
-            Rad::from(Deg(45.0)),
-            4096 as f32 / 4096 as f32,
-            0.01,
-            100.0,
-        );
-        // let view = Matrix4::<f32>::look_at_rh(
-        //     Point3::new(-0.09,-0.39, -9.5),
-        //     Point3::new(-0.97, 0.17, 0.17),
-        //     Vector3::new(0.0, 1.0, 0.0),
-        // );
-        let proj = cgmath::ortho(
-            -1.0, 1.0,
-            -1.0, 1.0,
-            -5.0, 5.0
-        );
         let w1 = Matrix4::<f32>::from_angle_x(Rad::from(Deg(90.0)));
         let world = Matrix4::<f32>::from_translation(Vector3::new(0.0, 0.01, -10.0)) * w1;
 

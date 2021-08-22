@@ -74,7 +74,10 @@ impl HelloApplication {
     pub fn new(wnd: &winit::window::Window) -> HelloApplication {
         let env = Arc::new(env::RenderEnv::new(wnd));
 
-        let msaa_samples = ash_render_env::utils::get_max_usable_sample_count(&env);
+        let max_msaa_samples = ash_render_env::utils::get_max_usable_sample_count(&env);
+        let msaa_samples = vk::SampleCountFlags::TYPE_2; //ash_render_env::utils::get_max_usable_sample_count(&env);
+
+        println!("MSAA: {:?} (max={:?})", msaa_samples, max_msaa_samples);
 
         let mut swapchain_stuff = ash_render_env::swapchain::SwapChain::new(&env, wnd.inner_size());
 
@@ -255,6 +258,7 @@ impl HelloApplication {
                 }
                 Event::RedrawRequested(_) => {
                     self.draw_frame(&wnd);
+                    self.tick_counter.tick_frame();
                 }
                 // Important!
                 Event::LoopDestroyed => {
@@ -334,7 +338,8 @@ impl HelloApplication {
             &[mesh_shadowmap_draw],
         );
 
-        self.quad_renderer.update_shadows(self.camera.view_matrix(), self.light_vp);
+        self.quad_renderer.write_shadowmap_ubo(self.camera.view_matrix(), self.light_vp);
+
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let terrain_draw = self.terrain_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let skybox_draw = self.skybox_renderer.draw(self.camera.skybox_view_matrix(), self.camera.proj_matrix());

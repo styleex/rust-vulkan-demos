@@ -110,7 +110,7 @@ impl QuadRenderer {
         }
     }
 
-    pub fn update_shadows(&mut self, view: Matrix4<f32>, light_vp: Matrix4<f32>) {
+    pub fn write_shadowmap_ubo(&mut self, view: Matrix4<f32>, light_vp: Matrix4<f32>) {
         self.uniform_buffer.write_data(Uniforms {
             view,
             light_vp,

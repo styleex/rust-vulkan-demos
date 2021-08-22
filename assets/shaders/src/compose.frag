@@ -12,8 +12,6 @@ layout(binding = 4) uniform UniformBufferObject {
     mat4 light_vp;
 } ubo;
 
-
-
 layout(location = 0) out vec4 outFragcolor;
 layout(constant_id = 0) const int NUM_SAMPLES = 8;
 
@@ -109,10 +107,10 @@ void main() {
 
 		vec4 view_pos = ubo.view * vec4(pos, 1.0);
 		view_pos /= view_pos.w;
-//		if(view_pos.z < -4.516079) {
-//			shadow += 1.0;
-//			continue;
-//		}
+		if(view_pos.z < -4.516079) {
+			shadow += 1.0;
+			continue;
+		}
 
 		cascadeColor = vec3(1.0f, 0.25f, 0.25f);
 

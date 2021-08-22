@@ -10,6 +10,11 @@ use ash_render_env::env::RenderEnv;
 
 const CASCADE_COUNT: usize = 4;
 
+struct CascadeInfo {
+    view_proj_mat: Matrix4<f32>,
+    max_z: f32,
+}
+
 struct Cascade {
     view: vk::ImageView,
     framebuffer: vk::Framebuffer,
@@ -211,8 +216,6 @@ impl ShadowMapFramebuffer {
     }
 
     pub fn update_cascades(&mut self, camera: &Camera, cascade_split_lambda: f32) -> Matrix4<f32> {
-        // let cascade_split_lambda = 0.9 as f32;
-
         let near_clip = camera.near_clip;
         let far_clip = camera.far_clip;
         let clip_range = far_clip - near_clip;
@@ -248,58 +251,63 @@ impl ShadowMapFramebuffer {
 
         let inv_cam = (camera.proj_matrix() * camera.view_matrix()).invert().unwrap();
 
-        let mut camera_corners = vec![];
-        for corner in frustum_corners {
-            let inv_corner: Vector4<f32> = inv_cam * corner.extend(1.0);
-            camera_corners.push(inv_corner.truncate() / inv_corner.w)
+        let mut last_split_dist = 0.0;
+        let mut cascades = Vec::<CascadeInfo>::new();
+        for cascade_index in 0..CASCADE_COUNT {
+            let mut camera_corners = vec![];
+            for corner in frustum_corners {
+                let inv_corner: Vector4<f32> = inv_cam * corner.extend(1.0);
+                camera_corners.push(inv_corner.truncate() / inv_corner.w)
+            }
+
+            let split_dist = camera_splits[cascade_index];
+            for i in 0..4 {
+                let dist = camera_corners[i + 4] - camera_corners[i];
+
+                camera_corners[i + 4] = camera_corners[i] + dist * split_dist;
+                camera_corners[i] = camera_corners[i] + dist * last_split_dist;
+            }
+
+            let mut frustum_center = Vector3::new(0.0, 0.0, 0.0);
+            for v in camera_corners.iter().cloned() {
+                frustum_center += v;
+            }
+            frustum_center /= (camera_corners.len() as f32);
+
+            let mut radius = 0.0 as f32;
+            for v in camera_corners.iter() {
+                let dist = v.distance(frustum_center);
+                radius = radius.max(dist);
+            }
+            radius = (radius * 16.0).ceil() / 16.0;
+
+            let max_extents = cgmath::Vector3::new(radius, radius, radius);
+            let min_extents = -max_extents;
+
+            let light_dir = Vector3::new(0.70, 0.25, -0.67).normalize();
+            let light_pos = frustum_center - light_dir * (-min_extents.z) * 100.0;
+            let view: Matrix4<f32> = cgmath::Matrix4::look_at_rh(
+                Point3::new(light_pos.x, light_pos.y, light_pos.z),
+                Point3::new(frustum_center.x, frustum_center.y, frustum_center.z),
+                Vector3::new(0.0, 1.0, 0.0),
+            );
+
+            let proj = cgmath::ortho(
+                2.0 * min_extents.x, 2.0 * max_extents.x,
+                2.0 * min_extents.y, 2.0 * max_extents.y,
+                -10.0, 100.0 * (max_extents.z - min_extents.z),
+            );
+
+            let split_depth = (camera.near_clip + split_dist * clip_range) * -1.0;
+            cascades.push(CascadeInfo {
+                view_proj_mat: proj * view,
+                max_z: split_depth
+            });
+
+            last_split_dist = split_dist;
         }
 
-        let last_split_dist = 0.0;
-
-        let split_dist = camera_splits[0];
-        for i in 0..4 {
-            let dist = camera_corners[i + 4] - camera_corners[i];
-
-            camera_corners[i + 4] = camera_corners[i] + dist * split_dist;
-            camera_corners[i] = camera_corners[i] + dist * last_split_dist;
-        }
-
-        let mut frustum_center = Vector3::new(0.0, 0.0, 0.0);
-        for v in camera_corners.iter().cloned() {
-            frustum_center += v;
-        }
-        frustum_center /= (camera_corners.len() as f32);
-
-        let mut radius = 0.0 as f32;
-        for v in camera_corners.iter() {
-            let dist = v.distance(frustum_center);
-            radius = radius.max(dist);
-        }
-        radius = (radius * 16.0).ceil() / 16.0;
-
-        let max_extents = cgmath::Vector3::new(radius, radius, radius);
-        let min_extents = -max_extents;
-
-        let light_dir = Vector3::new(0.70, 0.25, -0.67).normalize();
-        let light_pos = frustum_center - light_dir * (-min_extents.z) * 100.0;
-        let view: Matrix4<f32> = cgmath::Matrix4::look_at_rh(
-            Point3::new(light_pos.x, light_pos.y, light_pos.z),
-            Point3::new(frustum_center.x, frustum_center.y, frustum_center.z),
-            Vector3::new(0.0, 1.0, 0.0),
-        );
-
-        // println!("pos={:?} dir={:?} radius={:?}", light_pos, light_dir, radius);
-
-        // println!("{:?} {:?}", Point3::new(light_pos.x, light_pos.y, light_pos.z), Point3::new(furstum_center.x, furstum_center.y, furstum_center.z));
-        let proj = cgmath::ortho(
-            2.0 * min_extents.x, 2.0 * max_extents.x,
-            2.0 * min_extents.y, 2.0 * max_extents.y,
-            -10.0, 100.0 * (max_extents.z - min_extents.z),
-        );
-
-        let split_depth = (camera.near_clip + split_dist * clip_range) * -1.0;
-        // println!("{}", split_depth);
-        proj * view
+        cascades[0].view_proj_mat
     }
 }
 
