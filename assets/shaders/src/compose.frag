@@ -13,7 +13,7 @@ layout(binding = 4) uniform UniformBufferObject {
 } ubo;
 
 layout(location = 0) out vec4 outFragcolor;
-layout(constant_id = 0) const int NUM_SAMPLES = 8;
+layout(constant_id = 0) const int NUM_SAMPLES = 2;
 
 layout (location = 0) in vec2 inUV;
 
@@ -40,12 +40,14 @@ vec4 resolve(sampler2DMS tex, ivec2 uv)
 
 float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex) {
 	float shadow = 1.0;
-	float bias = 0.0005;
+	float bias = 0.005;
 	float ambient = 0.3;
 
 	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
 		float dist = texture(shadowMap, shadowCoord.st + offset).r;
-		if (shadowCoord.w > 0 && (shadowCoord.z - bias) > dist) {
+
+		// TODO: WHY NEED ABS??
+		if (shadowCoord.w > 0 && abs(dist) < abs(shadowCoord.z - bias)) {
 			shadow = ambient;
 		}
 	}
@@ -74,7 +76,7 @@ float filterPCF(vec4 sc, uint cascadeIndex)
 
 	float shadowFactor = 0.0;
 	int count = 0;
-	int range = 2;
+	int range = 1;
 
 	for (int x = -range; x <= range; x++) {
 		for (int y = -range; y <= range; y++) {
@@ -107,7 +109,7 @@ void main() {
 
 		vec4 view_pos = ubo.view * vec4(pos, 1.0);
 		view_pos /= view_pos.w;
-		if(view_pos.z < -4.516079) {
+		if(view_pos.z < -3.79) {
 			shadow += 1.0;
 			continue;
 		}
@@ -115,8 +117,8 @@ void main() {
 		cascadeColor = vec3(1.0f, 0.25f, 0.25f);
 
 		vec4 shadowCoord = (biasMat * ubo.light_vp) * vec4(pos, 1.0);
-		//shadow += textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
-		shadow += filterPCF(shadowCoord / shadowCoord.w, 0);
+		shadow += textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
+//		shadow += filterPCF(shadowCoord / shadowCoord.w, 0);
 	}
 
 	shadow /= NUM_SAMPLES;

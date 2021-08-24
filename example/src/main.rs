@@ -18,7 +18,7 @@ use ash_render_env::fps_limiter::FPSLimiter;
 use ash_render_env::primary_cmd_buffer::PrimaryCommandBuffer;
 use utils::{render_pass, sync};
 
-use crate::shadow_map::ShadowMapFramebuffer;
+use crate::shadow_map::{CASCADE_COUNT, CascadeInfo, ShadowMapFramebuffer};
 use crate::utils::heightmap_terrain::terrain::{HeightMap, TerrainData};
 use crate::utils::heightmap_terrain::terrain_renderer::TerrainRenderer;
 use crate::utils::mesh::Mesh;
@@ -36,14 +36,14 @@ struct HelloApplication {
 
     final_pass_draw_command: PrimaryCommandBuffer,
     geometry_pass_draw_command: PrimaryCommandBuffer,
-    shadowmap_pass_draw_command: PrimaryCommandBuffer,
+    shadowmap_pass_draw_commands: Vec<PrimaryCommandBuffer>,
 
     quad_renderer: QuadRenderer,
     swapchain_stuff: ash_render_env::swapchain::SwapChain,
 
     mesh: Arc<Mesh>,
     mesh_renderer: MeshRenderer,
-    mesh_shadow_map_renderer: MeshShadowMapRenderer,
+    mesh_shadow_map_renderers: Vec<MeshShadowMapRenderer>,
 
     skybox_renderer: SkyboxRenderer,
 
@@ -66,8 +66,9 @@ struct HelloApplication {
     shadow_map_fb: ShadowMapFramebuffer,
 
     env: Arc<env::RenderEnv>,
-    light_vp: Matrix4<f32>,
+    cascades: Vec<CascadeInfo>,
     cascade_split_lambda: f32,
+    egui_current_shadowmap_cascade_image: u32,
 }
 
 impl HelloApplication {
@@ -156,19 +157,36 @@ impl HelloApplication {
             dimensions);
 
 
-        let shadow_map_fb = ShadowMapFramebuffer::new(env.clone());
+        let mut shadow_map_fb = ShadowMapFramebuffer::new(env.clone());
         egui.register_texture_layout(1, shadow_map_fb.get_cascade_view(0), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+        egui.register_texture_layout(2, shadow_map_fb.get_cascade_view(1), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+        egui.register_texture_layout(3, shadow_map_fb.get_cascade_view(2), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+        egui.register_texture_layout(4, shadow_map_fb.get_cascade_view(3), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
-        let mut shadowmap_pass_draw_command = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
-        shadowmap_pass_draw_command.set_dimensions([4096 as u32, 4096 as u32]);
+        let mut shadowmap_pass_draw_commands = Vec::new();
 
-        let mesh_shadow_map_renderer = MeshShadowMapRenderer::new(
-            env.clone(),
-            shadow_map_fb.render_pass(),
-            mesh.clone(),
-            MAX_FRAMES_IN_FLIGHT,
-            [4096, 4096],
-        );
+        for cascade_idx in 0..CASCADE_COUNT {
+            let mut shadowmap_pass_draw_command = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
+            shadowmap_pass_draw_command.set_dimensions([4096 as u32, 4096 as u32]);
+
+            shadowmap_pass_draw_commands.push(shadowmap_pass_draw_command);
+        }
+
+        let mut mesh_shadow_map_renderers = Vec::new();
+        for _ in 0..CASCADE_COUNT {
+            mesh_shadow_map_renderers.push(
+                MeshShadowMapRenderer::new(
+                    env.clone(),
+                    shadow_map_fb.render_pass(),
+                    mesh.clone(),
+                    MAX_FRAMES_IN_FLIGHT,
+                    [4096, 4096],
+                )
+            );
+        }
+
+        let cascade_split_lambda = 0.9;
+        let cascades = shadow_map_fb.update_cascades(&camera, cascade_split_lambda);
 
         let quad_renderer = QuadRenderer::new(
             env.clone(),
@@ -186,7 +204,7 @@ impl HelloApplication {
             shadow_map_fb,
             final_pass_draw_command: quad_render_system,
             geometry_pass_draw_command: draw_mesh_render_system,
-            shadowmap_pass_draw_command,
+            shadowmap_pass_draw_commands,
 
             quad_renderer,
             swapchain_stuff,
@@ -205,14 +223,15 @@ impl HelloApplication {
 
             mesh,
             mesh_renderer,
-            mesh_shadow_map_renderer,
+            mesh_shadow_map_renderers,
 
             skybox_renderer,
             terrain_renderer,
 
             tick_counter,
-            light_vp: Matrix4::identity(),
-            cascade_split_lambda: 0.9,
+            cascades,
+            cascade_split_lambda,
+            egui_current_shadowmap_cascade_image: 1,
         }
     }
 
@@ -245,7 +264,7 @@ impl HelloApplication {
                     if !self.egui.context().is_pointer_over_area() {
                         let changed = self.camera.handle_event(&event);
                         if changed {
-                            self.light_vp = self.shadow_map_fb.update_cascades(&self.camera, self.cascade_split_lambda);
+                            self.cascades = self.shadow_map_fb.update_cascades(&self.camera, self.cascade_split_lambda);
                         }
                     }
 
@@ -330,15 +349,22 @@ impl HelloApplication {
                 stencil: 0,
             }
         }];
-        let mesh_shadowmap_draw = self.mesh_shadow_map_renderer.draw(&self.camera, self.light_vp);
-        let shadowmap_pass_cmd = self.shadowmap_pass_draw_command.execute_secondary(
-            shadow_map_clear,
-            self.shadow_map_fb.frambuffer(0),
-            self.shadow_map_fb.render_pass(),
-            &[mesh_shadowmap_draw],
-        );
 
-        self.quad_renderer.write_shadowmap_ubo(self.camera.view_matrix(), self.light_vp);
+        let mut cascade_draws = Vec::new();
+        for (cascade_idx, cascade) in self.cascades.iter().enumerate() {
+            let mesh_shadowmap_draw = self.mesh_shadow_map_renderers[cascade_idx].draw(&self.camera, cascade.view_proj_mat);
+
+            cascade_draws.push(
+                self.shadowmap_pass_draw_commands[cascade_idx].execute_secondary(
+                    shadow_map_clear.clone(),
+                    self.shadow_map_fb.framebuffer(cascade_idx),
+                    self.shadow_map_fb.render_pass(),
+                    &[mesh_shadowmap_draw],
+                )
+            );
+        }
+
+        self.quad_renderer.write_shadowmap_ubo(self.camera.view_matrix(), self.cascades[0].view_proj_mat);
 
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let terrain_draw = self.terrain_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
@@ -369,7 +395,7 @@ impl HelloApplication {
             &[self.quad_renderer.second_buffer, gui_render_op],
         );
 
-        let mrt_pass = [geometry_pass_cmd, shadowmap_pass_cmd];
+        let mrt_pass: Vec<vk::CommandBuffer> = cascade_draws.iter().chain(vec!(geometry_pass_cmd).iter()).copied().collect();
         let composite_pass = [quad_cmd_buf];
 
         let submit_infos = [
@@ -461,11 +487,20 @@ impl HelloApplication {
 
             ui.label(format!("X: {:.2}, Y: {:.2}, Z: {:.2}", view_dir.x, view_dir.y, view_dir.z));
             ui.label(format!("FPS: {:.2}", self.tick_counter.fps()));
-            ui.image(egui::TextureId::User(1), [200.0, 200.0]);
+
+            egui::ComboBox::from_label("Shadow map data")
+                .selected_text(format!("{}", self.egui_current_shadowmap_cascade_image))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.egui_current_shadowmap_cascade_image, 1, "1");
+                    ui.selectable_value(&mut self.egui_current_shadowmap_cascade_image, 2, "2");
+                    ui.selectable_value(&mut self.egui_current_shadowmap_cascade_image, 3, "3");
+                    ui.selectable_value(&mut self.egui_current_shadowmap_cascade_image, 4, "4");
+                });
+            ui.image(egui::TextureId::User(self.egui_current_shadowmap_cascade_image as u64), [200.0, 200.0]);
 
             let resp = ui.add(egui::DragValue::new(&mut self.cascade_split_lambda).speed(0.01).clamp_range(RangeInclusive::new(0.1, 1.0)));
             if resp.changed() {
-                self.light_vp = self.shadow_map_fb.update_cascades(&self.camera, self.cascade_split_lambda);
+                self.cascades = self.shadow_map_fb.update_cascades(&self.camera, self.cascade_split_lambda);
             }
         });
     }
@@ -493,6 +528,16 @@ impl HelloApplication {
         self.mesh_renderer.resize_framebuffer(dimensions);
         self.skybox_renderer.resize_framebuffer(dimensions);
         self.terrain_renderer.resize_framebuffer(dimensions);
+
+        self.camera.set_viewport(dimensions[0], dimensions[1]);
+
+        // for render in self.mesh_shadow_map_renderers.iter_mut() {
+        //     render.resize_framebuffer(dimensions);
+        // }
+        //
+        // for cmds in self.shadowmap_pass_draw_commands.iter_mut() {
+        //     cmds.set_dimensions(dimensions);
+        // }
     }
 
     fn cleanup_swapchain(&mut self) {

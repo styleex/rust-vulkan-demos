@@ -44,7 +44,7 @@ impl TerrainRenderer {
                 .vertex_input(Vertex::binding_descriptions(), Vertex::attribute_descriptions())
                 .msaa(msaa_samples)
                 .color_attachment_count(color_attachment_count)
-                .with_depth_func(vk::CompareOp::LESS)
+                .with_depth_func(vk::CompareOp::LESS_OR_EQUAL)
                 .cull_mode(vk::CullModeFlags::FRONT)
                 .build()
         };

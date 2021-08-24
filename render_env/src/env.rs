@@ -160,6 +160,7 @@ impl RenderEnv {
             let physical_device_features = vk::PhysicalDeviceFeatures {
                 sampler_anisotropy: vk::TRUE, // enable anisotropy device feature from Chapter-24.
                 sample_rate_shading: vk::TRUE,
+                depth_clamp: vk::TRUE,
                 ..Default::default()
             };
 

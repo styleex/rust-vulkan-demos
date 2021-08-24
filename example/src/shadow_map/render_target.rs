@@ -7,12 +7,13 @@ use cgmath::{InnerSpace, Matrix4, MetricSpace, Point3, SquareMatrix, Transform, 
 
 use ash_render_env::camera::Camera;
 use ash_render_env::env::RenderEnv;
+use std::ops::{Sub, Add};
 
-const CASCADE_COUNT: usize = 4;
+pub const CASCADE_COUNT: usize = 4;
 
-struct CascadeInfo {
-    view_proj_mat: Matrix4<f32>,
-    max_z: f32,
+pub struct CascadeInfo {
+    pub view_proj_mat: Matrix4<f32>,
+    pub max_z: f32,
 }
 
 struct Cascade {
@@ -137,7 +138,7 @@ impl ShadowMapFramebuffer {
 
         // CREATE CASCADES VIEWS AND FRAMEBUFFERS
         let mut cascades = Vec::with_capacity(CASCADE_COUNT);
-        for i in 0..CASCADE_COUNT - 1 {
+        for i in 0..CASCADE_COUNT {
             let imageview_create_info = vk::ImageViewCreateInfo {
                 s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
                 p_next: ptr::null(),
@@ -207,7 +208,7 @@ impl ShadowMapFramebuffer {
         self.cascades[index].view.clone()
     }
 
-    pub fn frambuffer(&self, index: usize) -> vk::Framebuffer {
+    pub fn framebuffer(&self, index: usize) -> vk::Framebuffer {
         self.cascades[index].framebuffer.clone()
     }
 
@@ -215,7 +216,7 @@ impl ShadowMapFramebuffer {
         self.render_pass.clone()
     }
 
-    pub fn update_cascades(&mut self, camera: &Camera, cascade_split_lambda: f32) -> Matrix4<f32> {
+    pub fn update_cascades(&mut self, camera: &Camera, cascade_split_lambda: f32) -> Vec<CascadeInfo> {
         let near_clip = camera.near_clip;
         let far_clip = camera.far_clip;
         let clip_range = far_clip - near_clip;
@@ -243,6 +244,7 @@ impl ShadowMapFramebuffer {
             cgmath::Vector3::<f32>::new(1.0, 1.0, -1.0),
             cgmath::Vector3::<f32>::new(1.0, -1.0, -1.0),
             cgmath::Vector3::<f32>::new(-1.0, -1.0, -1.0),
+
             cgmath::Vector3::<f32>::new(-1.0, 1.0, 1.0),
             cgmath::Vector3::<f32>::new(1.0, 1.0, 1.0),
             cgmath::Vector3::<f32>::new(1.0, -1.0, 1.0),
@@ -255,17 +257,17 @@ impl ShadowMapFramebuffer {
         let mut cascades = Vec::<CascadeInfo>::new();
         for cascade_index in 0..CASCADE_COUNT {
             let mut camera_corners = vec![];
-            for corner in frustum_corners {
+            for corner in frustum_corners.iter().cloned() {
                 let inv_corner: Vector4<f32> = inv_cam * corner.extend(1.0);
                 camera_corners.push(inv_corner.truncate() / inv_corner.w)
             }
 
             let split_dist = camera_splits[cascade_index];
             for i in 0..4 {
-                let dist = camera_corners[i + 4] - camera_corners[i];
+                let dist = camera_corners[i + 4].sub(camera_corners[i]);
 
-                camera_corners[i + 4] = camera_corners[i] + dist * split_dist;
-                camera_corners[i] = camera_corners[i] + dist * last_split_dist;
+                camera_corners[i + 4] = camera_corners[i].add(dist * split_dist);
+                camera_corners[i] = camera_corners[i].add(dist * last_split_dist);
             }
 
             let mut frustum_center = Vector3::new(0.0, 0.0, 0.0);
@@ -284,8 +286,9 @@ impl ShadowMapFramebuffer {
             let max_extents = cgmath::Vector3::new(radius, radius, radius);
             let min_extents = -max_extents;
 
-            let light_dir = Vector3::new(0.70, 0.25, -0.67).normalize();
-            let light_pos = frustum_center - light_dir * (-min_extents.z) * 100.0;
+            let light_dir = (Vector3::new(0.70, 0.25, -0.67)).normalize();
+            let light_pos = frustum_center - light_dir * (-min_extents.z);
+
             let view: Matrix4<f32> = cgmath::Matrix4::look_at_rh(
                 Point3::new(light_pos.x, light_pos.y, light_pos.z),
                 Point3::new(frustum_center.x, frustum_center.y, frustum_center.z),
@@ -293,9 +296,9 @@ impl ShadowMapFramebuffer {
             );
 
             let proj = cgmath::ortho(
-                2.0 * min_extents.x, 2.0 * max_extents.x,
-                2.0 * min_extents.y, 2.0 * max_extents.y,
-                -10.0, 100.0 * (max_extents.z - min_extents.z),
+                min_extents.x, max_extents.x,
+                min_extents.y, max_extents.y,
+                0.0, (max_extents.z - min_extents.z),
             );
 
             let split_depth = (camera.near_clip + split_dist * clip_range) * -1.0;
@@ -303,11 +306,12 @@ impl ShadowMapFramebuffer {
                 view_proj_mat: proj * view,
                 max_z: split_depth
             });
+            println!("cascade_idx={:?}, min={:?}, max={:?}, split_depth={:?}", cascade_index, min_extents, max_extents, split_depth);
 
             last_split_dist = split_dist;
         }
 
-        cascades[0].view_proj_mat
+        cascades
     }
 }
 

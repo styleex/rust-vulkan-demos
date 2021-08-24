@@ -45,7 +45,8 @@ impl MeshShadowMapRenderer {
                 .vertex_shader(vert_shader_module)
                 .fragment_shader(frag_shader_module)
                 .vertex_input(mesh::Vertex::binding_descriptions(), mesh::Vertex::attribute_descriptions())
-                .with_depth_test()
+                .with_depth_func(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_clamp_enable(true)
                 .color_attachment_count(0)
                 .build()
         };

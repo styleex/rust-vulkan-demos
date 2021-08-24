@@ -35,8 +35,8 @@ impl Camera {
             up_dir: vec3(0.0, 1.0, 0.0),
             yaw: -90.0,
             pitch: 0.0,
-            near_clip: 0.001,
-            far_clip: 100.0,
+            near_clip: 0.05,
+            far_clip: 48.0,
         }
     }
 

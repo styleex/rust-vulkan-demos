@@ -7,6 +7,7 @@ use ash_render_env::env::RenderEnv;
 use ash_render_env::utils::buffer_utils::create_buffer;
 use std::marker::PhantomData;
 use cgmath::Matrix4;
+use std::ptr;
 
 #[repr(C)]
 pub struct ShadowMapData {
@@ -66,6 +67,14 @@ impl<T> UniformBuffer<T> {
 
             data_ptr.copy_from_nonoverlapping(&data, 1);
 
+            let range = vk::MappedMemoryRange {
+                s_type: vk::StructureType::MAPPED_MEMORY_RANGE,
+                p_next: ptr::null(),
+                memory: self.buffer_memory,
+                offset: 0,
+                size: buffer_size,
+            };
+            self.device.flush_mapped_memory_ranges(&[range]);
             self.device
                 .unmap_memory(self.buffer_memory);
         }

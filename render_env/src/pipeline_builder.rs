@@ -232,7 +232,7 @@ impl PipelineBuilder {
             flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
             depth_test_enable: vk::TRUE,
             depth_write_enable: vk::TRUE,
-            depth_compare_op: vk::CompareOp::LESS,
+            depth_compare_op: vk::CompareOp::LESS_OR_EQUAL,
             depth_bounds_test_enable: vk::FALSE,
             stencil_test_enable: vk::FALSE,
             front: stencil_state,
@@ -273,6 +273,15 @@ impl PipelineBuilder {
         self
     }
 
+    pub fn depth_clamp_enable(mut self, enable: bool) -> Self {
+        self.rasterization.depth_clamp_enable = if enable {
+            vk::TRUE
+        } else {
+            vk::FALSE
+        };
+
+        self
+    }
 
     pub fn disable_culling(mut self) -> Self {
         self.rasterization.cull_mode = vk::CullModeFlags::NONE;
