@@ -244,7 +244,6 @@ impl ShadowMapFramebuffer {
             cgmath::Vector3::<f32>::new(1.0, 1.0, -1.0),
             cgmath::Vector3::<f32>::new(1.0, -1.0, -1.0),
             cgmath::Vector3::<f32>::new(-1.0, -1.0, -1.0),
-
             cgmath::Vector3::<f32>::new(-1.0, 1.0, 1.0),
             cgmath::Vector3::<f32>::new(1.0, 1.0, 1.0),
             cgmath::Vector3::<f32>::new(1.0, -1.0, 1.0),
@@ -298,13 +297,20 @@ impl ShadowMapFramebuffer {
             let proj = cgmath::ortho(
                 min_extents.x, max_extents.x,
                 min_extents.y, max_extents.y,
-                -5.0, (max_extents.z - min_extents.z),
+                0.0, (max_extents.z - min_extents.z),
             );
 
+            // TODO: c1r1 need to be -1.0 (https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/)
+            let corr_matrix = cgmath::Matrix4::<f32>::new(
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 0.5, 0.0,
+                0.0, 0.0, 0.5, 1.0,
+            );
             let split_depth = (camera.near_clip + split_dist * clip_range) * -1.0;
             cascades.push(CascadeInfo {
-                view_proj_mat: proj * view,
-                max_z: split_depth
+                view_proj_mat: corr_matrix * proj * view,
+                max_z: split_depth,
             });
             println!("cascade_idx={:?}, min={:?}, max={:?}, split_depth={:?}", cascade_index, min_extents, max_extents, split_depth);
 
