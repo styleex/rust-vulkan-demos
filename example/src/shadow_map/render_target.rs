@@ -298,7 +298,7 @@ impl ShadowMapFramebuffer {
             let proj = cgmath::ortho(
                 min_extents.x, max_extents.x,
                 min_extents.y, max_extents.y,
-                0.0, (max_extents.z - min_extents.z),
+                -5.0, (max_extents.z - min_extents.z),
             );
 
             let split_depth = (camera.near_clip + split_dist * clip_range) * -1.0;

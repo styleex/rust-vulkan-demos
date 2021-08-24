@@ -46,8 +46,7 @@ float textureProj(vec4 shadowCoord, vec2 offset, uint cascadeIndex) {
 	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
 		float dist = texture(shadowMap, shadowCoord.st + offset).r;
 
-		// TODO: WHY NEED ABS??
-		if (shadowCoord.w > 0 && abs(dist) < abs(shadowCoord.z - bias)) {
+		if (shadowCoord.w > 0 && dist < shadowCoord.z - bias) {
 			shadow = ambient;
 		}
 	}
@@ -109,7 +108,7 @@ void main() {
 
 		vec4 view_pos = ubo.view * vec4(pos, 1.0);
 		view_pos /= view_pos.w;
-		if(view_pos.z < -3.79) {
+		if(view_pos.z < -2.5125608) {
 			shadow += 1.0;
 			continue;
 		}
@@ -117,8 +116,8 @@ void main() {
 		cascadeColor = vec3(1.0f, 0.25f, 0.25f);
 
 		vec4 shadowCoord = (biasMat * ubo.light_vp) * vec4(pos, 1.0);
-		shadow += textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
-//		shadow += filterPCF(shadowCoord / shadowCoord.w, 0);
+//		shadow += textureProj(shadowCoord / shadowCoord.w, vec2(0.0), 0);
+		shadow += filterPCF(shadowCoord / shadowCoord.w, 0);
 	}
 
 	shadow /= NUM_SAMPLES;

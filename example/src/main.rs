@@ -185,7 +185,7 @@ impl HelloApplication {
             );
         }
 
-        let cascade_split_lambda = 0.9;
+        let cascade_split_lambda = 0.81;
         let cascades = shadow_map_fb.update_cascades(&camera, cascade_split_lambda);
 
         let quad_renderer = QuadRenderer::new(
