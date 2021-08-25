@@ -314,7 +314,7 @@ impl ShadowMapFramebuffer {
             });
             println!("cascade_idx={:?}, min={:?}, max={:?}, split_depth={:?}", cascade_index, min_extents, max_extents, split_depth);
 
-            last_split_dist = split_dist;
+            last_split_dist = camera_splits[cascade_index];
         }
 
         cascades

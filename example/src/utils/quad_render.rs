@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ash::version::DeviceV1_0;
 use ash::vk;
-use cgmath::Matrix4;
+use cgmath::{Matrix4, SquareMatrix};
 
 use ash_render_env::{descriptor_set, pipeline_builder, shader};
 use ash_render_env::descriptor_set::{DescriptorSet, DescriptorSetBuilder};
@@ -12,11 +12,13 @@ use ash_render_env::frame_buffer::Framebuffer;
 use ash_render_env::pipeline_builder::{Pipeline, PipelineBuilder};
 
 use crate::shadow_map::uniform_buffer::UniformBuffer;
+use crate::shadow_map::{CASCADE_COUNT, CascadeInfo};
 
 #[repr(C)]
 struct Uniforms {
+    cascade_splits: [f32; CASCADE_COUNT],
     view: Matrix4<f32>,
-    light_vp: Matrix4<f32>,
+    cascade_vp: [Matrix4<f32>; CASCADE_COUNT],
 }
 
 
@@ -110,10 +112,19 @@ impl QuadRenderer {
         }
     }
 
-    pub fn write_shadowmap_ubo(&mut self, view: Matrix4<f32>, light_vp: Matrix4<f32>) {
+    pub fn write_shadowmap_ubo(&mut self, view: Matrix4<f32>, cascades: &Vec<CascadeInfo>) {
+        let mut cascade_splits = [0.0; CASCADE_COUNT];
+        let mut cascade_vp = [Matrix4::<f32>::identity(); CASCADE_COUNT];
+
+        for (idx, cascade) in cascades.iter().enumerate() {
+            cascade_splits[idx] = cascade.max_z;
+            cascade_vp[idx] = cascade.view_proj_mat;
+        }
+
         self.uniform_buffer.write_data(Uniforms {
             view,
-            light_vp,
+            cascade_vp,
+            cascade_splits
         })
     }
     fn render_quad(env: &RenderEnv, dimensions: [u32; 2], pipeline: &Pipeline, descriptor_set: &DescriptorSet, render_pass: vk::RenderPass) -> vk::CommandBuffer {

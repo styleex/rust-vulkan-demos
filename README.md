@@ -17,11 +17,11 @@ Plan:
   
 * (OK) egui integration 
   
-* Deferred shading pipeline 
+* (OK) Deferred shading pipeline 
 
+* (OK) Parallel-split Cascaded Shadow Maps
+  
 * HDRR pipeline
-
-* (partial) Shadow mapping pipeline
 
 
 

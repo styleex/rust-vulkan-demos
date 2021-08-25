@@ -185,13 +185,13 @@ impl HelloApplication {
             );
         }
 
-        let cascade_split_lambda = 0.81;
+        let cascade_split_lambda = 0.1;
         let cascades = shadow_map_fb.update_cascades(&camera, cascade_split_lambda);
 
         let quad_renderer = QuadRenderer::new(
             env.clone(),
             &offscreen_framebuffer,
-            shadow_map_fb.get_cascade_view(0),
+            shadow_map_fb.view,
             quad_render_pass,
             msaa_samples,
             dimensions);
@@ -364,7 +364,7 @@ impl HelloApplication {
             );
         }
 
-        self.quad_renderer.write_shadowmap_ubo(self.camera.view_matrix(), self.cascades[0].view_proj_mat);
+        self.quad_renderer.write_shadowmap_ubo(self.camera.view_matrix(), &self.cascades);
 
         let mesh_draw = self.mesh_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
         let terrain_draw = self.terrain_renderer.draw(self.camera.view_matrix(), self.camera.proj_matrix());
@@ -524,20 +524,12 @@ impl HelloApplication {
         self.egui.set_dimensions(dimensions);
         self.egui.register_texture(0, self.offscreen_buffer.attachments[2].view, true);
 
-        self.quad_renderer.update_framebuffer(&self.offscreen_buffer, self.shadow_map_fb.get_cascade_view(0), dimensions);
+        self.quad_renderer.update_framebuffer(&self.offscreen_buffer, self.shadow_map_fb.view, dimensions);
         self.mesh_renderer.resize_framebuffer(dimensions);
         self.skybox_renderer.resize_framebuffer(dimensions);
         self.terrain_renderer.resize_framebuffer(dimensions);
 
         self.camera.set_viewport(dimensions[0], dimensions[1]);
-
-        // for render in self.mesh_shadow_map_renderers.iter_mut() {
-        //     render.resize_framebuffer(dimensions);
-        // }
-        //
-        // for cmds in self.shadowmap_pass_draw_commands.iter_mut() {
-        //     cmds.set_dimensions(dimensions);
-        // }
     }
 
     fn cleanup_swapchain(&mut self) {
