@@ -4,7 +4,7 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 
 use ash_render_env::env::RenderEnv;
-use ash_render_env::utils::buffer_utils::create_buffer;
+use ash_render_env::utils::buffer_utils::create_buffer_;
 use std::marker::PhantomData;
 use cgmath::Matrix4;
 use std::ptr;
@@ -17,6 +17,7 @@ pub struct ShadowMapData {
 pub struct UniformBuffer<T> {
     pub buffer: vk::Buffer,
     pub buffer_memory: vk::DeviceMemory,
+    size: u64,
     device: ash::Device,
 
     phantom: PhantomData<T>,
@@ -35,7 +36,7 @@ impl<T> UniformBuffer<T> {
     pub fn new(env: Arc<RenderEnv>) -> UniformBuffer<T> {
         let buffer_size = std::mem::size_of::<T>();
 
-        let (buffer, buffer_memory) = create_buffer(
+        let (buffer, buffer_memory, size) = create_buffer_(
             env.device(),
             buffer_size as u64,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
@@ -46,6 +47,7 @@ impl<T> UniformBuffer<T> {
         UniformBuffer {
             buffer,
             buffer_memory,
+            size,
             device: env.device().clone(),
             phantom: PhantomData
         }
@@ -60,7 +62,7 @@ impl<T> UniformBuffer<T> {
                     .map_memory(
                         self.buffer_memory,
                         0,
-                        buffer_size,
+                        self.size,
                         vk::MemoryMapFlags::empty(),
                     )
                     .expect("Failed to Map Memory") as *mut T;
@@ -72,7 +74,7 @@ impl<T> UniformBuffer<T> {
                 p_next: ptr::null(),
                 memory: self.buffer_memory,
                 offset: 0,
-                size: buffer_size,
+                size: vk::WHOLE_SIZE,
             };
             self.device.flush_mapped_memory_ranges(&[range]);
             self.device

@@ -20,13 +20,13 @@ pub(crate) fn find_memory_type(
 }
 
 
-pub fn create_buffer(
+pub fn create_buffer_(
     device: &ash::Device,
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,
     required_memory_properties: vk::MemoryPropertyFlags,
     device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
-) -> (vk::Buffer, vk::DeviceMemory) {
+) -> (vk::Buffer, vk::DeviceMemory, u64) {
     let buffer_create_info = vk::BufferCreateInfo {
         s_type: vk::StructureType::BUFFER_CREATE_INFO,
         p_next: ptr::null(),
@@ -69,6 +69,18 @@ pub fn create_buffer(
             .bind_buffer_memory(buffer, buffer_memory, 0)
             .expect("Failed to bind Buffer");
     }
+
+    (buffer, buffer_memory, mem_requirements.size as u64)
+}
+
+pub fn create_buffer(
+    device: &ash::Device,
+    size: vk::DeviceSize,
+    usage: vk::BufferUsageFlags,
+    required_memory_properties: vk::MemoryPropertyFlags,
+    device_memory_properties: &vk::PhysicalDeviceMemoryProperties,
+) -> (vk::Buffer, vk::DeviceMemory) {
+    let (buffer, buffer_memory, _) = create_buffer_(device, size, usage, required_memory_properties, device_memory_properties);
 
     (buffer, buffer_memory)
 }
