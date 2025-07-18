@@ -114,9 +114,6 @@ impl HelloApplication {
 
         let sync = sync::create_sync_objects(env.device());
 
-        let mut egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions, MAX_FRAMES_IN_FLIGHT, msaa_samples);
-        egui.register_texture(0, offscreen_framebuffer.attachments[2].view, true);
-
         let mut draw_mesh_render_system = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
         draw_mesh_render_system.set_dimensions(dimensions);
 
@@ -157,6 +154,9 @@ impl HelloApplication {
             dimensions);
 
 
+        let mut egui = Egui::new(env.clone(), swapchain_stuff.format, wnd.scale_factor(), dimensions, MAX_FRAMES_IN_FLIGHT, msaa_samples);
+        egui.register_texture(0, offscreen_framebuffer.attachments[2].view, true);
+
         let mut shadow_map_fb = ShadowMapFramebuffer::new(env.clone());
         egui.register_texture_layout(1, shadow_map_fb.get_cascade_view(0), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL);
         egui.register_texture_layout(2, shadow_map_fb.get_cascade_view(1), vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL);
@@ -167,7 +167,7 @@ impl HelloApplication {
 
         for cascade_idx in 0..CASCADE_COUNT {
             let mut shadowmap_pass_draw_command = PrimaryCommandBuffer::new(env.clone(), MAX_FRAMES_IN_FLIGHT);
-            shadowmap_pass_draw_command.set_dimensions([4096 as u32, 4096 as u32]);
+            shadowmap_pass_draw_command.set_dimensions([4096u32, 4096u32]);
 
             shadowmap_pass_draw_commands.push(shadowmap_pass_draw_command);
         }

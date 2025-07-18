@@ -11,7 +11,7 @@ use ash::extensions::mvk::MacOSSurface;
 
 use ash::extensions::ext::DebugUtils;
 use ash::extensions::khr::Surface;
-
+use ash::vk::KhrMaintenance2Fn;
 #[cfg(target_os = "macos")]
 use cocoa::appkit::{NSView, NSWindow};
 #[cfg(target_os = "macos")]

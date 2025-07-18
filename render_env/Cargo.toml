@@ -14,7 +14,7 @@ memoffset = "0.6.4"
 cgmath = "0.18.0"
 image = "0.23"
 tobj = "3.0"
-spirv-reflect = "0.2.3"
+spirv-reflect = { git = "ssh://git@github.com/gwihlidal/spirv-reflect-rs.git", branch = "master" }
 egui = "0.13.1"
 
 

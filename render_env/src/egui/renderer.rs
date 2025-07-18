@@ -60,7 +60,7 @@ impl EguiRenderer {
         let vertex_bindings = vec![
             vk::VertexInputBindingDescription {
                 binding: 0,
-                stride: 4 * std::mem::size_of::<f32>() as u32 + 4 * std::mem::size_of::<u8>() as u32,
+                stride: 4 * size_of::<f32>() as u32 + 4 * size_of::<u8>() as u32,
                 input_rate: vk::VertexInputRate::VERTEX,
             }
         ];

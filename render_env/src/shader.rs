@@ -51,7 +51,7 @@ fn get_descriptor_type(reflected_type: ReflectDescriptorType) -> Option<vk::Desc
         (ReflectDescriptorType::UniformBufferDynamic, vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC),
         (ReflectDescriptorType::StorageBufferDynamic, vk::DescriptorType::STORAGE_BUFFER_DYNAMIC),
         (ReflectDescriptorType::InputAttachment, vk::DescriptorType::INPUT_ATTACHMENT),
-        (ReflectDescriptorType::AccelerationStructureNV, vk::DescriptorType::ACCELERATION_STRUCTURE_NV),
+        (ReflectDescriptorType::AccelerationStructureKHR, vk::DescriptorType::ACCELERATION_STRUCTURE_NV),
     ];
 
     for (reflected, target) in mapping {

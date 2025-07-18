@@ -3,7 +3,7 @@ use std::ffi::{c_void, CStr, CString};
 
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
-use ash::vk::{ApplicationInfo, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCreateFlagsEXT, DebugUtilsMessengerCreateInfoEXT};
+use ash::vk::{ApplicationInfo, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCreateFlagsEXT, DebugUtilsMessengerCreateInfoEXT, KhrMaintenance2Fn};
 use winit::window::Window;
 
 use super::platforms;
@@ -156,6 +156,7 @@ impl RenderEnv {
 
             let enable_extension_names = [
                 ash::extensions::khr::Swapchain::name().as_ptr(), // currently just enable the Swapchain extension.
+                KhrMaintenance2Fn::name().as_ptr(),
             ];
             let physical_device_features = vk::PhysicalDeviceFeatures {
                 sampler_anisotropy: vk::TRUE, // enable anisotropy device feature from Chapter-24.
